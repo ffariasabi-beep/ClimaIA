@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión | ClimaIA{% endblock %}
+{% block content %}
+<main class="auth-page">
+  <section class="auth-card">
+    <p class="eyebrow">CLIMAIA · INVESTIGACIÓN</p>
+    <h1>Bienvenido nuevamente</h1>
+    <p class="auth-description">Ingresá a tu espacio de investigación climática.</p>
+    <form method="POST" action="{{ url_for('auth.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="identifier">Usuario o correo electrónico</label>
+      <input id="identifier" name="identifier" type="text" autocomplete="username" required>
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Iniciar sesión</button>
+    </form>
+    <p class="auth-switch">¿Todavía no tenés cuenta? <a href="{{ url_for('auth.register') }}">Crear cuenta</a></p>
+  </section>
+</main>
+<style>
+.auth-page{width:min(460px,calc(100% - 32px));margin:64px auto}
+.auth-card{padding:36px;border:1px solid #29405a;border-radius:18px;background:#101f33;color:#edf4ff}
+.auth-card h1{font-size:29px;margin:10px 0}
+.eyebrow{color:#75c9ff;font-size:11px;letter-spacing:2px;font-weight:700}
+.auth-description{color:#a9bad0;line-height:1.6;margin-bottom:28px}
+.auth-card label{display:block;margin:0 0 8px;font-size:13px;color:#dce9f8}
+.auth-card input{display:block;width:100%;padding:13px;margin:0 0 19px;border:1px solid #30465f;border-radius:9px;background:#091626;color:white}
+.auth-card input:focus{outline:2px solid #168bd0}
+.auth-card button{width:100%;padding:14px;border:0;border-radius:9px;background:#168bd0;color:white;font-weight:700;cursor:pointer}
+.auth-switch{text-align:center;margin-top:23px;color:#a9bad0;font-size:13px}
+.auth-switch a{color:#75c9ff}
+</style>
+{% endblock %}

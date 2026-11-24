@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Memoria del Territorio | ClimaIA{% endblock %}
+
+{% block head %}
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/territory.css') }}"
+  >
+{% endblock %}
+
+{% block content %}
+<main class="territory-page">
+  <section class="territory-page-hero">
+    <div>
+      <a class="territory-back-link" href="{{ url_for('main.dashboard') }}#investigations">
+        ← Volver al centro de investigación
+      </a>
+      <span class="territory-eyebrow">CLIMAIA / OBSERVACIÓN DE LA TIERRA</span>
+      <h1>Memoria del <span>Territorio</span></h1>
+      <p>
+        Explorá imágenes satelitales, seguí el NDVI y compará estimaciones de
+        cobertura terrestre y agua con fuentes y límites explícitos.
+      </p>
+    </div>
+    <div class="territory-stage-badge">
+      <span>OBSERVACIÓN DE LA TIERRA</span>
+      <strong>Análisis territorial</strong>
+      <small>NASA MODIS · ESA WorldCover</small>
+    </div>
+  </section>
+
+  <section id="explorer" class="territory-explorer">
+    <aside class="territory-controls">
+      <div class="territory-control-card">
+        <span class="territory-section-label">01 / EXPLORAR</span>
+        <h2>Una región, distintas fechas</h2>
+        <p class="territory-control-intro">
+          Buscá una localidad de la base de ClimaIA o seleccioná un punto o
+          un área en el mapa.
+        </p>
+
+        <form
+          id="territory-search-form"
+          class="territory-search-form"
+          data-search-url="{{ url_for('api.search_locations') }}"
+          data-analytics-url="{{ url_for('api.analyze_territory_surface') }}"
+        >
+          <label for="territory-location-query">LOCALIDAD, REGIÓN O PAÍS</label>
+          <div class="territory-search-row">
+            <input
+              id="territory-location-query"
+              type="search"
+              minlength="2"
+              placeholder="Ej.: Córdoba, Argentina"
+              autocomplete="off"
+              required
+            >
+            <button type="submit">Buscar</button>
+          </div>
+        </form>
+        <p id="territory-search-status" class="territory-help" aria-live="polite">
+          Los resultados provienen del catálogo de localidades existente.
+        </p>
+        <div
+          id="territory-search-results"
+          class="territory-search-results"
+        ></div>
+
+        <label class="territory-field-label" for="territory-basemap">
+          CAPA BASE
+        </label>
+        <select id="territory-basemap" class="territory-select">
+          <option value="satellite">NASA MODIS Aqua · color real</option>
+          <option value="geographic">Mapa geográfico · OpenStreetMap</option>
+        </select>
+
+        <div id="territory-satellite-controls">
+          <label class="territory-field-label" for="territory-date">
+            DÍA FINAL DEL MOSAICO SATELITAL
+          </label>
+          <input
+            id="territory-date"
+            class="territory-input"
+            type="date"
+            min="2002-07-03"
+          >
+          <p class="territory-help">
+            La vista combina el día elegido con hasta los dos anteriores para
+            reducir franjas sin cobertura. Groq analiza el día elegido.
+          </p>
+
+          <div class="territory-compare-heading">
+            <label for="territory-compare-date">
+              COMPARACIÓN TEMPORAL
+            </label>
+            <span>Ventanas comparables de hasta 3 días</span>
+          </div>
+          <input
+            id="territory-compare-date"
+            class="territory-input"
+            type="date"
+            min="2002-07-03"
+          >
+          <button
+            id="territory-compare-toggle"
+            class="territory-secondary-button"
+            type="button"
+          >
+            Activar comparación
+          </button>
+          <div id="territory-swipe-control" class="territory-swipe-control" hidden>
+            <label for="territory-swipe-range">
+              Deslizá para comparar · segunda fecha a la izquierda
+            </label>
+            <input
+              id="territory-swipe-range"
+              type="range"
+              min="5"
+              max="95"
+              value="50"
+            >
+            <p class="territory-help">
+              Para notar mejor los cambios, seleccioná una localidad y acercá
+              el mapa a esa zona.
+            </p>
+          </div>
+        </div>
+
+        <div class="territory-area-control">
+          <button
+            id="territory-area-button"
+            class="territory-secondary-button"
+            type="button"
+            aria-pressed="false"
+          >
+            Marcar un área
+          </button>
+          <p class="territory-help">
+            Elegí dos esquinas sobre el mapa para delimitar un rectángulo.
+          </p>
+        </div>
+
+        <label class="territory-field-label" for="territory-analysis-layer">
+          CAPA DE OBSERVACIÓN
+        </label>
+        <select id="territory-analysis-layer" class="territory-select">
+          <option value="none">Sin capa analítica</option>
+          <option value="ndvi">Vegetación · NASA MODIS NDVI mensual</option>
+          <option value="worldcover-2020">Cobertura del suelo · ESA 2020</option>
+          <option value="worldcover-2021">Cobertura del suelo · ESA 2021</option>
+        </select>
+        <p class="territory-help">
+          La capa NDVI es mensual; WorldCover ofrece mapas anuales de 2020 y 2021.
+        </p>
+        <button
+          id="territory-analytics-button"
+          class="territory-secondary-button"
+          type="button"
+          disabled
+        >
+          Analizar la selección
+        </button>
+        <p
+          id="territory-analytics-status"
+          class="territory-help"
+          aria-live="polite"
+        >
+          Seleccioná un punto o un área para calcular indicadores.
+        </p>
+      </div>
+
+      <div class="territory-selection-card">
+        <span class="territory-section-label">SELECCIÓN</span>
+        <h2 id="territory-selection-title">Ningún lugar seleccionado</h2>
+        <div id="territory-selection-detail" class="territory-selection-detail">
+          <p>Hacé clic en el mapa o elegí un resultado de búsqueda.</p>
+        </div>
+      </div>
+
+      <section class="territory-research-card">
+        <span class="territory-section-label">ASISTENTE DE INVESTIGACIÓN · GROQ</span>
+        <h2>Investigá el territorio</h2>
+        <p class="territory-research-intro">
+          Preguntá por la zona seleccionada. Groq relaciona los mosaicos
+          NASA de las fechas elegidas con la historia climática del punto central.
+        </p>
+        <div
+          id="territory-ai-context"
+          class="territory-ai-context"
+          aria-live="polite"
+        >
+          Seleccioná un punto o área en el mapa para habilitar la consulta.
+        </div>
+        <div
+          id="territory-research-conversation"
+          class="territory-research-conversation"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
+          <p class="territory-chat-empty">
+            Podés preguntar qué muestra la comparación y cómo se relaciona
+            con el comportamiento climático registrado, sin asumir causalidad.
+          </p>
+        </div>
+        <form
+          id="territory-question-form"
+          class="territory-question-form"
+          data-research-url="{{ url_for('api.research_territory') }}"
+        >
+          <input
+            id="territory-csrf-token"
+            type="hidden"
+            value="{{ csrf_token() }}"
+          >
+          <label for="territory-question">PREGUNTA DE INVESTIGACIÓN</label>
+          <textarea
+            id="territory-question"
+            rows="3"
+            maxlength="1200"
+            placeholder="Ej.: ¿Qué evidencia conviene comparar entre estas fechas y qué límites tiene?"
+            required
+          ></textarea>
+          <button type="submit" disabled>Consultar a Groq</button>
+        </form>
+        <p id="territory-question-status" class="territory-help" aria-live="polite">
+          La IA usa datos de NASA GIBS y el reanálisis climático de Open-Meteo.
+        </p>
+        <p class="territory-help">
+          Groq recibe las imágenes del día elegido, no la composición visual
+          del mapa. El historial de repreguntas queda en esta pestaña y no se
+          guarda en la base de ClimaIA.
+        </p>
+      </section>
+    </aside>
+
+    <div class="territory-map-panel">
+      <div class="territory-map-toolbar">
+        <div>
+          <span class="territory-section-label">VISTA SATELITAL</span>
+          <strong id="territory-map-layer-name">
+            MODIS Aqua · composición visual de hasta 3 días · color real
+          </strong>
+        </div>
+        <span id="territory-map-date-label" class="territory-date-badge">
+          Cargando fecha…
+        </span>
+      </div>
+      <div class="territory-map-wrap">
+        <div
+          id="territory-map"
+          role="application"
+          aria-label="Mapa interactivo con imágenes satelitales reales NASA GIBS"
+        ></div>
+        <div
+          id="territory-analysis-legend"
+          class="territory-map-legend"
+          aria-live="polite"
+          hidden
+        ></div>
+        <div
+          id="territory-comparison-labels"
+          class="territory-comparison-labels"
+          hidden
+          aria-live="polite"
+        >
+          <span id="territory-comparison-left-label"></span>
+          <span id="territory-comparison-right-label"></span>
+        </div>
+        <div id="territory-swipe-divider" class="territory-swipe-divider" hidden>
+          <span></span>
+        </div>
+        <div id="territory-map-message" class="territory-map-message" aria-live="polite">
+          Cargando mosaicos satelitales de NASA…
+        </div>
+      </div>
+      <div class="territory-map-metadata">
+        <span id="territory-resolution">
+          NASA GIBS · MODIS Aqua · composición visual de hasta 3 días ·
+          fondo Blue Marble de referencia (NASA), fijo y fuera de la comparación
+        </span>
+        <a
+          href="https://worldview.earthdata.nasa.gov/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Explorar en NASA Worldview ↗
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section
+    id="territory-analytics-results"
+    class="territory-analytics-results"
+    aria-live="polite"
+    hidden
+  ></section>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script
+    src="{{ url_for('static', filename='js/territory.js') }}"
+    defer
+  ></script>
+{% endblock %}

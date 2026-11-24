@@ -1,0 +1,1110 @@
+
+{% extends "base.html" %}
+
+{% block title %}ADN Climático | ClimaIA{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .climate-container {
+        width: min(1250px, 92%);
+        margin: 45px auto 80px;
+        color: #e8edff;
+    }
+
+    .climate-header {
+        margin-bottom: 35px;
+    }
+
+    .climate-label {
+        color: #8fa5ff;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    .climate-header h1 {
+        font-size: clamp(30px, 5vw, 44px);
+        margin: 12px 0;
+        letter-spacing: -1.5px;
+    }
+
+    .climate-header p {
+        color: #a6b2d1;
+        max-width: 700px;
+        line-height: 1.7;
+    }
+
+    .search-panel,
+    .climate-card {
+        background: linear-gradient(145deg, #111d38, #0d172d);
+        border: 1px solid rgba(143, 165, 255, .15);
+        border-radius: 18px;
+        padding: 25px;
+    }
+
+    .search-panel {
+        margin-bottom: 30px;
+    }
+
+    .search-panel h2 {
+        font-size: 18px;
+        margin: 0 0 8px;
+    }
+
+    .search-panel p {
+        color: #9baaca;
+        font-size: 13px;
+        margin-bottom: 20px;
+    }
+
+    .search-form {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .search-form input {
+        flex: 1;
+        min-width: 220px;
+        padding: 14px 16px;
+        border-radius: 10px;
+        border: 1px solid #30436d;
+        background: #091328;
+        color: white;
+        outline: none;
+        font-size: 14px;
+    }
+
+    .search-form input:focus {
+        border-color: #829bff;
+    }
+
+    .search-form button,
+    .location-button {
+        padding: 14px 23px;
+        border: none;
+        border-radius: 10px;
+        background: #718aff;
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+        transition: .2s;
+    }
+
+    .search-form button:hover,
+    .location-button:hover {
+        background: #8ba0ff;
+        transform: translateY(-2px);
+    }
+
+    .error-message {
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 10px;
+        background: rgba(220, 70, 90, .12);
+        border: 1px solid rgba(220, 70, 90, .3);
+        color: #ff9da9;
+    }
+
+    /* RESULTADOS DE BÚSQUEDA */
+
+    .results-section {
+        margin: 30px 0;
+    }
+
+    .results-heading {
+        margin-bottom: 17px;
+    }
+
+    .results-heading h2 {
+        font-size: 21px;
+        margin-bottom: 7px;
+    }
+
+    .results-heading p {
+        color: #9baaca;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .locations-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px;
+    }
+
+    .location-option {
+        background: linear-gradient(145deg, #111d38, #0d172d);
+        border: 1px solid rgba(143, 165, 255, .17);
+        border-radius: 15px;
+        padding: 21px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 17px;
+        transition: .2s;
+    }
+
+    .location-option:hover {
+        border-color: rgba(143, 165, 255, .55);
+        transform: translateY(-2px);
+    }
+
+    .location-option h3 {
+        font-size: 17px;
+        margin: 0 0 8px;
+        color: #edf1ff;
+    }
+
+    .location-option p {
+        font-size: 13px;
+        color: #9baaca;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .location-coordinates {
+        color: #788dbb !important;
+        font-size: 11px !important;
+        margin-top: 8px !important;
+    }
+
+    .location-button {
+        width: 100%;
+        font-size: 13px;
+    }
+
+    .location-button:focus-visible,
+    .search-form button:focus-visible {
+        outline: 2px solid white;
+        outline-offset: 3px;
+    }
+
+    .location-heading {
+        margin: 35px 0 20px;
+    }
+
+    .location-heading h2 {
+        font-size: 26px;
+        margin: 8px 0;
+    }
+
+    .location-heading p {
+        color: #9baaca;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 25px;
+    }
+
+    .stat-card {
+        background: #111d38;
+        border: 1px solid rgba(143, 165, 255, .13);
+        padding: 21px;
+        border-radius: 15px;
+    }
+
+    .stat-card span {
+        color: #9baaca;
+        font-size: 12px;
+    }
+
+    .stat-card strong {
+        display: block;
+        font-size: 27px;
+        margin: 12px 0 5px;
+    }
+
+    .stat-card small {
+        color: #8293bb;
+        font-size: 11px;
+    }
+
+    .section-heading {
+        margin: 40px 0 18px;
+    }
+
+    .section-heading h2 {
+        font-size: 21px;
+        margin-bottom: 7px;
+    }
+
+    .section-heading p {
+        color: #9baaca;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .climate-card h3 {
+        font-size: 16px;
+        margin: 0 0 8px;
+    }
+
+    .card-description {
+        color: #91a1c4;
+        font-size: 12px;
+        line-height: 1.5;
+        margin-bottom: 22px;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 290px;
+    }
+
+    .annual-chart {
+        height: 340px;
+    }
+
+    .data-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .climate-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 600px;
+        font-size: 13px;
+    }
+
+    .climate-table th,
+    .climate-table td {
+        padding: 15px 12px;
+        text-align: left;
+        border-bottom: 1px solid rgba(143, 165, 255, .12);
+    }
+
+    .climate-table th {
+        color: #8fa5ff;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .climate-table td {
+        color: #d5def5;
+    }
+
+    .climate-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .period-info {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 25px;
+        padding: 17px 20px;
+        background: rgba(113, 138, 255, .08);
+        border: 1px solid rgba(113, 138, 255, .17);
+        border-radius: 12px;
+        color: #aebce0;
+        font-size: 12px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 55px 20px;
+        border: 1px dashed #30436d;
+        border-radius: 18px;
+        color: #9baaca;
+    }
+
+    .empty-state h2 {
+        color: #e8edff;
+        margin-bottom: 12px;
+    }
+
+    .empty-state p {
+        max-width: 500px;
+        margin: auto;
+        line-height: 1.7;
+        font-size: 13px;
+    }
+
+    .method-note {
+        margin-top: 25px;
+        color: #8293bb;
+        font-size: 11px;
+        line-height: 1.7;
+    }
+
+    @media (max-width: 850px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .charts-grid,
+        .locations-list {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 500px) {
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+        }
+
+        .stat-card {
+            padding: 15px;
+        }
+
+        .stat-card strong {
+            font-size: 21px;
+        }
+
+        .search-panel,
+        .climate-card,
+        .location-option {
+            padding: 18px;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="climate-container">
+
+    <header class="climate-header">
+
+        <span class="climate-label">
+            CLIMAIA · INVESTIGACIÓN CLIMÁTICA
+        </span>
+
+        <h1>ADN Climático</h1>
+
+        <p>
+            Descubrí la identidad climática de cada región.
+            Analizá sus patrones históricos de temperatura,
+            precipitaciones y otras variables para comprender
+            cómo se comporta su clima a lo largo del tiempo.
+        </p>
+
+    </header>
+
+
+    <!-- BUSCADOR -->
+
+    <section class="search-panel">
+
+        <h2>Explorar una región</h2>
+
+        <p>
+            Buscá una ciudad, pueblo o localidad de cualquier
+            parte del mundo. Podrás elegir el país y la región
+            antes de generar su perfil climático.
+        </p>
+
+        <form method="POST" class="search-form">
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <input
+                type="hidden"
+                name="action"
+                value="search"
+            >
+
+            <input
+                type="text"
+                name="city"
+                placeholder="Ejemplo: Arroyito, Córdoba, Argentina"
+                value="{{ searched_city }}"
+                required
+            >
+
+            <button type="submit">
+                Buscar localidad
+            </button>
+
+        </form>
+
+        {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+        {% endif %}
+
+    </section>
+
+
+    <!-- RESULTADOS DE UBICACIONES -->
+
+    {% if locations and not profile %}
+
+        <section class="results-section">
+
+            <div class="results-heading">
+
+                <span class="climate-label">
+                    RESULTADOS DE BÚSQUEDA
+                </span>
+
+                <h2>Seleccioná una ubicación</h2>
+
+                <p>
+                    Encontramos estas coincidencias para
+                    "{{ searched_city }}". Revisá el código
+                    del país y las coordenadas para elegir
+                    la ubicación correcta.
+                </p>
+
+            </div>
+
+
+            <div class="locations-list">
+
+                {% for result in locations %}
+
+                    <article class="location-option">
+
+                        <div>
+
+                            <h3>
+                                {{ result.name }}
+                            </h3>
+
+                            <p>
+                                <strong>Código de país:</strong>
+                                {{ result.country_code or "No disponible" }}
+                            </p>
+
+                            <p>
+                                <strong>Población registrada:</strong>
+                                {% if result.population is not none %}
+                                    {{ "{:,}".format(result.population).replace(",", ".") }}
+                                {% else %}
+                                    No disponible
+                                {% endif %}
+                            </p>
+
+                            <p>
+                                <strong>Identificador GeoNames:</strong>
+                                {{ result.geoname_id }}
+                            </p>
+
+                            <p class="location-coordinates">
+                                Coordenadas:
+                                {{ "%.3f"|format(result.latitude) }},
+                                {{ "%.3f"|format(result.longitude) }}
+                            </p>
+
+                        </div>
+
+
+                        <form method="POST">
+
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{ csrf_token() }}"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="action"
+                                value="select"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="city"
+                                value="{{ searched_city }}"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="selected_geoname_id"
+                                value="{{ result.geoname_id }}"
+                            >
+
+                            <button
+                                type="submit"
+                                class="location-button"
+                            >
+                                Analizar esta ubicación
+                            </button>
+
+                        </form>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        </section>
+
+    {% endif %}
+
+
+    <!-- PERFIL CLIMÁTICO -->
+
+    {% if profile and location %}
+
+        <section class="location-heading">
+
+            <span class="climate-label">
+                PERFIL CLIMÁTICO GENERADO
+            </span>
+
+            <h2>
+                {{ location.name }}
+            </h2>
+
+            <p>
+
+                <strong>Código de país:</strong>
+                {{ location.country_code or "No disponible" }}
+                <br>
+
+                <strong>Identificador GeoNames:</strong>
+                {{ location.geoname_id or "No disponible" }}
+                <br>
+
+                <strong>Población registrada:</strong>
+                {% if location.population is not none %}
+                    {{ "{:,}".format(location.population).replace(",", ".") }}
+                {% else %}
+                    No disponible
+                {% endif %}
+                <br>
+
+                <strong>Coordenadas:</strong>
+                {{ "%.3f"|format(location.latitude) }},
+                {{ "%.3f"|format(location.longitude) }}
+
+            </p>
+
+            <form method="POST" style="margin-top: 15px;">
+
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <input
+                    type="hidden"
+                    name="action"
+                    value="search"
+                >
+
+                <input
+                    type="hidden"
+                    name="city"
+                    value="{{ searched_city }}"
+                >
+
+                <button
+                    type="submit"
+                    class="location-button"
+                    style="width: auto;"
+                >
+                    Cambiar ubicación
+                </button>
+
+            </form>
+
+        </section>
+
+
+        <!-- ESTADÍSTICAS -->
+
+        <section class="stats-grid">
+
+            <article class="stat-card">
+
+                <span>Temperatura media</span>
+
+                <strong>
+                    {% if profile.general_statistics.temperature_mean is not none %}
+                        {{ profile.general_statistics.temperature_mean }} °C
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+
+                <small>Promedio del período</small>
+
+            </article>
+
+
+            <article class="stat-card">
+
+                <span>Precipitación acumulada</span>
+
+                <strong>
+                    {% if profile.general_statistics.precipitation_total is not none %}
+                        {{ profile.general_statistics.precipitation_total }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+
+                <small>mm durante todo el período</small>
+
+            </article>
+
+
+            <article class="stat-card">
+
+                <span>Registros analizados</span>
+
+                <strong>
+                    {{ "{:,}".format(profile.total_records).replace(",", ".") }}
+                </strong>
+
+                <small>Observaciones diarias</small>
+
+            </article>
+
+
+            <article class="stat-card">
+
+                <span>Período de estudio</span>
+
+                <strong style="font-size: 21px;">
+                    {{ profile.period.start[:4] }}
+                    –
+                    {{ profile.period.end[:4] }}
+                </strong>
+
+                <small>Referencia histórica</small>
+
+            </article>
+
+        </section>
+
+
+        <!-- GRÁFICOS MENSUALES -->
+
+        <section class="section-heading">
+
+            <h2>Comportamiento climático anual</h2>
+
+            <p>
+                Los siguientes gráficos permiten identificar
+                los patrones estacionales de la región.
+            </p>
+
+        </section>
+
+
+        <section class="charts-grid">
+
+            <article class="climate-card">
+
+                <h3>Temperatura mensual</h3>
+
+                <p class="card-description">
+                    Temperatura media de cada mes,
+                    calculada a partir de todos los años disponibles.
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+
+            </article>
+
+
+            <article class="climate-card">
+
+                <h3>Precipitaciones mensuales</h3>
+
+                <p class="card-description">
+                    Promedio diario de precipitación para cada mes,
+                    expresado en milímetros por día.
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="precipitationChart"></canvas>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- EVOLUCIÓN HISTÓRICA -->
+
+        <section class="section-heading">
+
+            <h2>Evolución histórica</h2>
+
+            <p>
+                Observá cómo variaron las temperaturas medias
+                de cada año.
+            </p>
+
+        </section>
+
+
+        <article class="climate-card">
+
+            <h3>Temperatura media anual</h3>
+
+            <p class="card-description">
+                Cada punto representa la temperatura media
+                de los registros disponibles durante ese año.
+            </p>
+
+            <div class="chart-container annual-chart">
+                <canvas id="annualChart"></canvas>
+            </div>
+
+        </article>
+
+
+        <!-- TABLA -->
+
+        <section class="section-heading">
+
+            <h2>Datos del perfil</h2>
+
+            <p>
+                Valores mensuales calculados a partir
+                de los registros históricos consultados.
+            </p>
+
+        </section>
+
+
+        <article class="climate-card">
+
+            <div class="data-table-wrapper">
+
+                <table class="climate-table">
+
+                    <thead>
+
+                        <tr>
+                            <th>Mes</th>
+                            <th>Temperatura media</th>
+                            <th>Máxima media</th>
+                            <th>Mínima media</th>
+                            <th>Precipitación diaria media</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        {% for month in profile.monthly_profile %}
+
+                            <tr>
+
+                                <td>{{ month.name }}</td>
+
+                                <td>
+                                    {{ month.temperature_mean if month.temperature_mean is not none else "—" }} °C
+                                </td>
+
+                                <td>
+                                    {{ month.temperature_max_mean if month.temperature_max_mean is not none else "—" }} °C
+                                </td>
+
+                                <td>
+                                    {{ month.temperature_min_mean if month.temperature_min_mean is not none else "—" }} °C
+                                </td>
+
+                                <td>
+                                    {{ month.precipitation_mean_daily if month.precipitation_mean_daily is not none else "—" }} mm/día
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </article>
+
+
+        <!-- PERÍODO -->
+
+        <div class="period-info">
+
+            <span>
+                <strong>Inicio:</strong>
+                {{ profile.period.start }}
+            </span>
+
+            <span>
+                <strong>Finalización:</strong>
+                {{ profile.period.end }}
+            </span>
+
+            <span>
+                <strong>Registros:</strong>
+                {{ profile.total_records }}
+            </span>
+
+        </div>
+
+
+        <p class="method-note">
+            Los datos meteorológicos se obtienen mediante Open-Meteo
+            para las coordenadas de la localidad seleccionada.
+            Los valores representan estadísticas de los registros
+            históricos disponibles. Los datos de reanálisis son
+            estimaciones basadas en modelos y observaciones, no
+            mediciones directas de una estación meteorológica
+            ubicada necesariamente en el punto seleccionado.
+
+            Este perfil constituye una caracterización estadística
+            y no una clasificación climática oficial.
+
+            <br><br>
+
+            Catálogo de localidades: GeoNames.
+            Datos distribuidos bajo licencia Creative Commons
+            Attribution (CC BY).
+        </p>
+
+
+    {% elif not locations %}
+
+        <section class="empty-state">
+
+            <h2>Descubrí la identidad climática de una región</h2>
+
+            <p>
+                Buscá una ciudad o localidad para comenzar.
+                ClimaIA encontrará las ubicaciones coincidentes
+                y te permitirá seleccionar una antes de analizar
+                sus registros históricos.
+            </p>
+
+        </section>
+
+    {% endif %}
+
+</div>
+
+
+<!-- GRÁFICOS -->
+
+{% if profile %}
+
+<script>
+
+    const monthlyData = {{ profile.monthly_profile | tojson }};
+    const annualData = {{ profile.annual_profile | tojson }};
+
+    Chart.defaults.color = "#9baaca";
+    Chart.defaults.font.family = "Arial";
+
+    const monthLabels = monthlyData.map(item => item.name);
+
+    const temperatureValues = monthlyData.map(
+        item => item.temperature_mean
+    );
+
+    const precipitationValues = monthlyData.map(
+        item => item.precipitation_mean_daily
+    );
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        interaction: {
+            intersect: false,
+            mode: "index"
+        },
+
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+
+        scales: {
+            x: {
+                grid: {
+                    display: false
+                }
+            },
+
+            y: {
+                grid: {
+                    color: "rgba(143,165,255,0.10)"
+                }
+            }
+        }
+    };
+
+
+    // TEMPERATURA MENSUAL
+
+    new Chart(
+        document.getElementById("temperatureChart"),
+        {
+            type: "line",
+
+            data: {
+                labels: monthLabels,
+
+                datasets: [{
+                    label: "Temperatura media",
+                    data: temperatureValues,
+                    borderColor: "#8fa5ff",
+                    backgroundColor: "rgba(143,165,255,0.13)",
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 3,
+                    spanGaps: true
+                }]
+            },
+
+            options: {
+                ...chartOptions,
+
+                scales: {
+                    ...chartOptions.scales,
+
+                    y: {
+                        ...chartOptions.scales.y,
+
+                        title: {
+                            display: true,
+                            text: "Temperatura (°C)"
+                        }
+                    }
+                }
+            }
+        }
+    );
+
+
+    // PRECIPITACIONES MENSUALES
+
+    new Chart(
+        document.getElementById("precipitationChart"),
+        {
+            type: "bar",
+
+            data: {
+                labels: monthLabels,
+
+                datasets: [{
+                    label: "Precipitación diaria media",
+                    data: precipitationValues,
+                    backgroundColor: "#54b9dc",
+                    borderRadius: 6
+                }]
+            },
+
+            options: {
+                ...chartOptions,
+
+                scales: {
+                    ...chartOptions.scales,
+
+                    y: {
+                        ...chartOptions.scales.y,
+
+                        title: {
+                            display: true,
+                            text: "Milímetros por día"
+                        }
+                    }
+                }
+            }
+        }
+    );
+
+
+    // EVOLUCIÓN ANUAL
+
+    new Chart(
+        document.getElementById("annualChart"),
+        {
+            type: "line",
+
+            data: {
+                labels: annualData.map(item => item.year),
+
+                datasets: [{
+                    label: "Temperatura media anual",
+
+                    data: annualData.map(
+                        item => item.temperature_mean
+                    ),
+
+                    borderColor: "#b29aff",
+                    backgroundColor: "rgba(178,154,255,0.12)",
+                    fill: true,
+                    tension: 0.25,
+                    pointRadius: 2,
+                    spanGaps: true
+                }]
+            },
+
+            options: {
+                ...chartOptions,
+
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "top"
+                    }
+                },
+
+                scales: {
+                    ...chartOptions.scales,
+
+                    x: {
+                        ...chartOptions.scales.x,
+
+                        ticks: {
+                            maxTicksLimit: 15
+                        }
+                    },
+
+                    y: {
+                        ...chartOptions.scales.y,
+
+                        title: {
+                            display: true,
+                            text: "Temperatura (°C)"
+                        }
+                    }
+                }
+            }
+        }
+    );
+
+</script>
+
+{% endif %}
+
+{% endblock %}

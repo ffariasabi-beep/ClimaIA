@@ -1,0 +1,4424 @@
+
+{% extends "base.html" %}
+{% block title %}Centro de inteligencia climática | ClimaIA{% endblock %}
+
+{% block content %}
+<main class="clima-dashboard">
+
+  <!-- ENCABEZADO -->
+  <section class="welcome-section">
+    <div>
+      <span class="section-label">CLIMAIA / CENTRO DE INVESTIGACIÓN</span>
+      <h1>El clima está cambiando.<br><span>Comprendamos cómo.</span></h1>
+      <p class="welcome-text">
+        Bienvenido/a, {{ user.username }}. Explorá datos históricos,
+        investigá patrones meteorológicos y descubrí las conexiones
+        entre el clima y nuestro planeta.
+      </p>
+    </div>
+
+    <aside class="observatory-widget" aria-labelledby="observatory-title">
+      <div class="observatory-heading">
+        <div>
+          <span class="section-label">CLIMAIA / OBSERVATORIO</span>
+          <h2 id="observatory-title">Observatorio climático mundial</h2>
+        </div>
+        <span class="observatory-live"><i></i> EN VIVO</span>
+      </div>
+
+      <div class="observatory-main">
+        <div class="observatory-globe-column">
+          <div
+            class="observatory-globe"
+            id="observatory-globe"
+            role="group"
+            aria-label="Globo climático interactivo. Arrastrá para girarlo y seleccioná un punto."
+            aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
+            tabindex="0"
+          >
+            <canvas
+              class="observatory-globe-canvas"
+              id="observatory-globe-canvas"
+              aria-hidden="true"
+            ></canvas>
+            <div class="observatory-markers" id="observatory-markers">
+              {% if global_conditions and global_conditions.regions %}
+                {% for city in global_conditions.regions %}
+                  <button
+                    class="observatory-marker{% if loop.index0 == selected_region_index %} is-selected{% endif %}"
+                    type="button"
+                    data-observatory-index="{{ loop.index0 }}"
+                    aria-label="{{ city.city }}, {{ city.country }}"
+                    title="{{ city.city }}, {{ city.country }}"
+                    aria-pressed="{{ 'true' if loop.index0 == selected_region_index else 'false' }}"
+                  ></button>
+                {% endfor %}
+              {% endif %}
+            </div>
+            <span class="observatory-globe-glow"></span>
+          </div>
+          <span class="observatory-globe-hint">Arrastrá para girar · seleccioná un punto</span>
+        </div>
+
+        <div class="observatory-reading" id="observatory-reading">
+          {% if global_conditions and global_conditions.regions %}
+            {% set observatory_city = global_conditions.regions[selected_region_index] %}
+            <span class="observatory-region" id="observatory-region">
+              {{ observatory_city.region }}
+            </span>
+            <h3 id="observatory-city">
+              {{ observatory_city.city }}, {{ observatory_city.country }}
+            </h3>
+            <div class="observatory-temperature">
+              <strong id="observatory-temperature">
+                {% if observatory_city.temperature is not none %}
+                  {{ observatory_city.temperature }}°
+                {% else %}
+                  --
+                {% endif %}
+              </strong>
+              <span>temperatura actual</span>
+            </div>
+            <div class="observatory-metrics">
+              <div><span>Humedad</span><strong id="observatory-humidity">{% if observatory_city.humidity is not none %}{{ observatory_city.humidity }}%{% else %}--{% endif %}</strong></div>
+              <div>
+                <span>Precipitación última hora</span>
+                <strong id="observatory-precipitation">{% if observatory_city.precipitation is not none %}{{ observatory_city.precipitation }} mm{% else %}--{% endif %}</strong>
+                <small id="observatory-precipitation-today">
+                  Acumulado hoy: {% if observatory_city.precipitation_today is not none %}{{ observatory_city.precipitation_today }} mm{% else %}--{% endif %}
+                </small>
+              </div>
+              <div><span>Viento</span><strong id="observatory-wind">{% if observatory_city.wind_speed is not none %}{{ observatory_city.wind_speed }} km/h{% else %}--{% endif %}</strong></div>
+              <div><span>Sensación</span><strong id="observatory-feels-like">{% if observatory_city.feels_like is not none %}{{ observatory_city.feels_like }}°{% else %}--{% endif %}</strong></div>
+            </div>
+            <span class="observatory-time" id="observatory-time">
+              {{ observatory_city.time or "Hora local no disponible" }}
+            </span>
+          {% else %}
+            <span class="observatory-region">OBSERVACIÓN NO DISPONIBLE</span>
+            <p class="observatory-empty">
+              No se pudieron cargar las condiciones actuales de las regiones.
+            </p>
+          {% endif %}
+
+          {% if global_data and global_data.latest_annual %}
+            <div class="observatory-anomaly">
+              <span>ANOMALÍA GLOBAL · NASA</span>
+              <strong>
+                {{ "%+.2f"|format(global_data.latest_annual.anomaly) }} °C
+              </strong>
+              <small>
+                {{ global_data.latest_annual.year }} · referencia
+                {{ global_data.reference_period }}
+              </small>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if global_conditions and global_conditions.regions %}
+        <nav class="observatory-regions" aria-label="Seleccionar región">
+          {% for city in global_conditions.regions %}
+            <button
+              class="observatory-region-button{% if loop.index0 == selected_region_index %} is-selected{% endif %}"
+              type="button"
+              data-observatory-index="{{ loop.index0 }}"
+              aria-pressed="{{ 'true' if loop.index0 == selected_region_index else 'false' }}"
+            >
+              <small>{{ city.region }}</small>
+              <span>{{ city.city }}</span>
+            </button>
+          {% endfor %}
+        </nav>
+        <div class="observatory-location-search">
+          <label for="observatory-location-query">
+            BUSCAR EN LA BASE DE LOCALIDADES
+          </label>
+          <form id="observatory-location-search-form">
+            <input
+              id="observatory-location-query"
+              type="search"
+              minlength="2"
+              placeholder="Ej.: Córdoba, Argentina"
+              autocomplete="off"
+              required
+            >
+            <button type="submit">Buscar</button>
+          </form>
+          <p id="observatory-search-message" aria-live="polite">
+            También podés explorar localidades que no aparecen en los puntos destacados.
+          </p>
+          <div
+            class="observatory-search-results"
+            id="observatory-search-results"
+          ></div>
+        </div>
+        <script type="application/json" id="observatory-regions-data">
+          {{ global_conditions.regions|tojson }}
+        </script>
+        <form class="observatory-ai-form" id="observatory-ai-form" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input
+            type="hidden"
+            name="observatory_location_geoname_id"
+            id="observatory-ai-location-id"
+            value=""
+          >
+          <input
+            type="hidden"
+            name="observatory_location_index"
+            id="observatory-ai-location-index"
+            value="{{ selected_region_index }}"
+          >
+          <input
+            type="hidden"
+            name="action"
+            value="generate_observatory_insight"
+          >
+          <button type="submit">
+            Interpretar datos con la IA de ClimaIA
+          </button>
+        </form>
+      {% endif %}
+
+      {% if observatory_report %}
+        <div class="observatory-ai-report" role="status">
+          <span class="section-label">LECTURA DE LOS DATOS OBSERVADOS</span>
+          <div
+            id="observatory-ai-report-content"
+            class="observatory-ai-report-content"
+          ></div>
+          <div id="observatory-ai-report-source">
+            {{ observatory_report }}
+          </div>
+        </div>
+      {% elif observatory_ai_error %}
+        <p class="observatory-ai-error" role="alert">
+          {{ observatory_ai_error }}
+        </p>
+      {% endif %}
+
+      <p class="observatory-source">
+        Condiciones actuales: Open-Meteo. Anomalía global: {{ global_data.source if global_data else "NASA GISTEMP" }}.
+        Las ciudades son puntos de referencia, no promedios de sus regiones.
+      </p>
+    </aside>
+  </section>
+
+  <!-- NAVEGACIÓN INTERNA -->
+  <nav class="dashboard-nav">
+    <a href="#world-map">Mapa mundial</a>
+    <a href="#overview">Arroyito</a>
+    <a href="#global">Panorama global</a>
+    <a href="#investigations">Investigaciones</a>
+    <a href="#profile">Mi perfil</a>
+  </nav>
+
+  <!-- RESUMEN CLIMÁTICO -->
+  <section id="overview" class="dashboard-section">
+    <div class="section-heading">
+      <div>
+        <span class="section-label">01 / OBSERVACIÓN</span>
+        <h2>Panorama climático</h2>
+        <p>Datos meteorológicos actuales de Arroyito.</p>
+      </div>
+      <span class="status-tag">OPEN-METEO · MODELO ACTUAL</span>
+    </div>
+
+    <div class="metrics-grid">
+
+      <!-- TEMPERATURA -->
+      <article class="metric-card">
+        <div class="metric-top">
+          <span>Temperatura actual</span>
+          <span class="metric-icon">°C</span>
+        </div>
+
+        <strong class="metric-value">
+          {% if weather_data %}
+            {{ weather_data.current.temperature }} °C
+          {% else %}
+            --
+          {% endif %}
+        </strong>
+
+        <p>
+          {% if weather_data %}
+            Sensación térmica: {{ weather_data.current.feels_like }} °C
+          {% else %}
+            Datos meteorológicos no disponibles.
+          {% endif %}
+        </p>
+
+        <div class="metric-line"></div>
+      </article>
+
+      <!-- PRECIPITACIONES -->
+      <article class="metric-card">
+        <div class="metric-top">
+          <span>Precipitación de hoy</span>
+          <span class="metric-icon">↘</span>
+        </div>
+
+        <strong class="metric-value">
+          {% if weather_data %}
+            {% if weather_data.current.precipitation_today is not none %}
+              {{ weather_data.current.precipitation_today }} mm
+            {% else %}
+              {{ weather_data.current.precipitation }} mm
+            {% endif %}
+          {% else %}
+            --
+          {% endif %}
+        </strong>
+
+        <p>
+          Acumulado diario · última hora:
+          {% if weather_data %}
+            {{ weather_data.current.precipitation }} mm
+          {% else %}
+            --
+          {% endif %}
+        </p>
+        <div class="metric-line"></div>
+      </article>
+
+      <!-- HUMEDAD -->
+      <article class="metric-card">
+        <div class="metric-top">
+          <span>Humedad relativa</span>
+          <span class="metric-icon">%</span>
+        </div>
+
+        <strong class="metric-value">
+          {% if weather_data %}
+            {{ weather_data.current.humidity }}%
+          {% else %}
+            --
+          {% endif %}
+        </strong>
+
+        <p>Humedad relativa del aire.</p>
+        <div class="metric-line"></div>
+      </article>
+
+      <!-- VIENTO -->
+      <article class="metric-card">
+        <div class="metric-top">
+          <span>Velocidad del viento</span>
+          <span class="metric-icon">⌁</span>
+        </div>
+
+        <strong class="metric-value">
+          {% if weather_data %}
+            {{ weather_data.current.wind_speed }} km/h
+          {% else %}
+            --
+          {% endif %}
+        </strong>
+
+        <p>Velocidad actual del viento.</p>
+        <div class="metric-line"></div>
+      </article>
+
+    </div>
+
+    {% if weather_error %}
+      <p class="weather-error">
+        No se pudieron cargar los datos meteorológicos.
+        {{ weather_error }}
+      </p>
+    {% endif %}
+
+    {% if weather_data %}
+      <p class="weather-update">
+        Última actualización: {{ weather_data.current.time }}
+        · Ubicación: {{ location.name }}, {{ location.country }}
+        · Estimación del modelo meteorológico Open-Meteo; no es una medición de estación local.
+      </p>
+    {% endif %}
+  </section>
+
+
+  <!-- PANORAMA GLOBAL -->
+  <section id="global" class="dashboard-section global-section">
+    <div class="section-heading">
+      <div>
+        <span class="section-label">02 / ESCALA PLANETARIA</span>
+        <h2>Panorama global</h2>
+        <p>Condiciones meteorológicas actuales y evolución de la temperatura media global.</p>
+      </div>
+      <span class="status-tag">DATOS DE NASA Y OPEN-METEO</span>
+    </div>
+
+    {% if global_data %}
+      <div class="global-summary-grid">
+        <article class="global-highlight-card">
+          <div class="global-card-top">
+            <span>Anomalía anual global</span>
+            <span class="global-symbol">↗</span>
+          </div>
+          <strong class="global-main-value">
+            {{ "%+.2f"|format(global_data.latest_annual.anomaly) }} °C
+          </strong>
+          <p>
+            Año {{ global_data.latest_annual.year }} · respecto del promedio
+            {{ global_data.reference_period }}
+          </p>
+          <span class="global-source">FUENTE: {{ global_data.source }}</span>
+        </article>
+
+        <article class="global-highlight-card">
+          <div class="global-card-top">
+            <span>Último registro mensual</span>
+            <span class="global-symbol">◷</span>
+          </div>
+          <strong class="global-main-value">
+            {{ "%+.2f"|format(global_data.latest_month.anomaly) }} °C
+          </strong>
+          <p>
+            {{ global_data.latest_month.month }} {{ global_data.latest_month.year }}
+            · anomalía mensual
+          </p>
+          <span class="global-source">REFERENCIA: {{ global_data.reference_period }}</span>
+        </article>
+      </div>
+
+      <article class="global-history-card">
+        <div class="global-card-heading">
+          <div>
+            <span class="section-label">NASA GISTEMP V4</span>
+            <h3>Evolución de la temperatura global</h3>
+            <p>Anomalía anual en °C durante los últimos 30 años disponibles.</p>
+          </div>
+          <span class="chart-unit">°C</span>
+        </div>
+
+        {% if global_data.historical %}
+          <div class="global-chart" role="img" aria-label="Gráfico de anomalías anuales de temperatura global">
+            {% for item in global_data.historical %}
+              <div class="global-bar-column" title="{{ item.year }}: {{ '%+.2f'|format(item.anomaly) }} °C">
+                <span class="global-bar-value">{{ "%+.1f"|format(item.anomaly) }}</span>
+                <div class="global-bar-track">
+                  <div class="global-bar" style="height: {{ ((item.anomaly + 0.5) * 42)|round|int }}px;"></div>
+                </div>
+                <span class="global-bar-year">{{ item.year }}</span>
+              </div>
+            {% endfor %}
+          </div>
+          <p class="chart-note">
+            Los valores positivos indican años más cálidos que el promedio de referencia;
+            no representan la temperatura absoluta del planeta.
+          </p>
+        {% else %}
+          <p class="global-empty">Todavía no hay registros históricos para mostrar.</p>
+        {% endif %}
+      </article>
+    {% else %}
+      <article class="global-error-card">
+        <strong>No se pudieron cargar los registros históricos globales.</strong>
+        <p>{{ global_error or "Intentá actualizar el dashboard más tarde." }}</p>
+      </article>
+    {% endif %}
+
+    <div class="global-cities-heading">
+      <div>
+        <span class="section-label">OBSERVACIÓN METEOROLÓGICA</span>
+        <h3>Condiciones actuales por región</h3>
+        <p>Ciudades de referencia distribuidas en distintas regiones del mundo.</p>
+      </div>
+      <span class="global-live-label"><span></span> CONSULTA AL CARGAR</span>
+    </div>
+
+    {% if global_conditions and global_conditions.regions %}
+      <div class="global-cities-grid">
+        {% for city in global_conditions.regions %}
+          <article class="global-city-card">
+            <div class="global-city-top">
+              <span class="global-city-region">{{ city.region }}</span>
+              <span class="global-city-dot"></span>
+            </div>
+            <h4>{{ city.city }}</h4>
+            <strong class="global-city-temperature">
+              {% if city.temperature is not none %}
+                {{ city.temperature }}°
+              {% else %}
+                --
+              {% endif %}
+            </strong>
+            <div class="global-city-details">
+              <div>
+                <span>Humedad</span>
+                <strong>{% if city.humidity is not none %}{{ city.humidity }}%{% else %}--{% endif %}</strong>
+              </div>
+              <div>
+                <span>Precipitación</span>
+                <strong>{% if city.precipitation is not none %}{{ city.precipitation }} mm{% else %}--{% endif %}</strong>
+              </div>
+              <div>
+                <span>Viento</span>
+                <strong>{% if city.wind_speed is not none %}{{ city.wind_speed }} km/h{% else %}--{% endif %}</strong>
+              </div>
+              <div>
+                <span>Sensación</span>
+                <strong>{% if city.feels_like is not none %}{{ city.feels_like }}°{% else %}--{% endif %}</strong>
+              </div>
+            </div>
+            {% if city.time %}
+              <p class="global-city-time">Hora local consultada: {{ city.time }}</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+
+      {% if global_conditions.errors %}
+        <p class="global-warning">
+          No se pudieron consultar estas ciudades: {{ global_conditions.errors|join(", ") }}.
+        </p>
+      {% endif %}
+
+      <p class="global-data-note">
+        Fuente: {{ global_conditions.source }}. Las condiciones actuales se obtienen
+        mediante modelos meteorológicos y corresponden a cada ciudad, no al promedio
+        de todo su continente. Los datos se consultan cuando se carga esta página.
+      </p>
+    {% else %}
+      <article class="global-error-card">
+        <strong>No se pudieron cargar las condiciones meteorológicas globales.</strong>
+        <p>{{ conditions_error or "Intentá actualizar el dashboard más tarde." }}</p>
+      </article>
+    {% endif %}
+  </section>
+
+    <!-- MAPA CLIMÁTICO MUNDIAL -->
+  <section id="world-map" class="dashboard-section world-map-section">
+
+    <div class="section-heading">
+      <div>
+        <span class="section-label">03 / EXPLORACIÓN GLOBAL</span>
+        <h2>Atlas climático mundial</h2>
+        <p>Explorá localidades, ubicaciones y condiciones meteorológicas de distintas regiones del planeta.</p>
+      </div>
+      <span class="status-tag">MAPA INTERACTIVO</span>
+    </div>
+
+    <div class="map-search-panel">
+      <div class="map-search-heading">
+        <span class="section-label">BUSCADOR GEOGRÁFICO</span>
+        <h3>¿Qué lugar querés investigar?</h3>
+        <p>Podés buscar una ciudad por su nombre. No es obligatorio indicar el país.</p>
+      </div>
+
+      <div class="map-search-controls">
+        <input
+          type="text"
+          id="map-location-input"
+          placeholder="País, región o localidad: Argentina, Andalucía, Córdoba..."
+          autocomplete="off"
+        >
+        <button type="button" id="map-search-button">
+          Buscar en el atlas
+        </button>
+      </div>
+
+      <p id="map-search-message" class="map-message" aria-live="polite"></p>
+      <div id="map-search-results" class="map-search-results"></div>
+    </div>
+
+      
+<!-- CONTROLES DE CAPAS CLIMÁTICAS -->
+
+<div class="map-layer-panel">
+
+  <div class="map-layer-description">
+    <span class="section-label">CAPAS DE INFORMACIÓN</span>
+    <h3>Variables meteorológicas actuales</h3>
+    <p>
+      Explorá temperatura, humedad y viento actual con las condiciones
+      actuales del modelo meteorológico.
+    </p>
+  </div>
+
+  <div class="map-layer-controls">
+
+    <label for="climate-layer-select">
+      Variable climática
+    </label>
+
+    <select id="climate-layer-select">
+      <option value="temperature">Temperatura actual</option>
+      <option value="humidity">Humedad relativa</option>
+      <option value="wind_speed">Velocidad del viento</option>
+    </select>
+
+    <div class="map-period-control" id="map-period-control" hidden>
+      <label for="climate-period-year">Año analizado</label>
+      <select id="climate-period-year"></select>
+      <small>
+        Las anomalías comparan el año elegido con la referencia 1991-2020.
+      </small>
+    </div>
+
+    <button type="button" id="map-layer-refresh">
+      Actualizar datos
+    </button>
+
+  </div>
+
+  <div class="map-layer-status" id="map-layer-status">
+    Preparando atlas climático...
+  </div>
+
+  <div class="map-layer-legend" id="climate-layer-legend">
+    <span>La escala aparecerá al cargar los datos.</span>
+  </div>
+
+</div>
+
+
+    <div class="world-map-layout">
+
+      <div class="world-map-container">
+        <div id="climate-world-map" aria-label="Mapa interactivo de localidades del mundo"></div>
+
+        <div class="map-legend">
+          <span><i class="legend-dot local-dot"></i> Arroyito</span>
+          <span><i class="legend-dot global-dot"></i> Ciudades de referencia</span>
+          <span><i class="legend-dot selected-dot"></i> Localidad seleccionada</span>
+        </div>
+      </div>
+
+      <aside class="map-information-panel">
+        <span class="section-label">INFORMACIÓN METEOROLÓGICA</span>
+        <h3 id="selected-location-name">Explorá el mapa</h3>
+        <p id="selected-location-country" class="map-location-country">
+          Seleccioná una localidad para consultar sus condiciones actuales.
+        </p>
+
+        <div id="map-weather-information" class="map-weather-information">
+          <div class="map-empty-state">
+            <span>⌖</span>
+            <p>Los datos de la localidad seleccionada aparecerán en este espacio.</p>
+          </div>
+        </div>
+
+        <section class="map-history-panel" aria-labelledby="map-history-title">
+          <div class="map-history-heading">
+            <span class="section-label">ARCHIVO · 1991-2020</span>
+            <h4 id="map-history-title">Anomalías y evolución histórica</h4>
+            <p>
+              Comparación anual con la normal climática de referencia.
+            </p>
+          </div>
+          <div class="map-history-controls">
+            <label>
+              Desde
+              <select id="map-history-start-year"></select>
+            </label>
+            <label>
+              Hasta
+              <select id="map-history-end-year"></select>
+            </label>
+            <button type="button" id="map-history-load" disabled>
+              Analizar período
+            </button>
+          </div>
+          <div class="map-history-compare-controls">
+            <label for="map-history-compare-input">
+              Buscar una segunda localidad para comparar
+            </label>
+            <div class="map-history-compare-search">
+              <input
+                type="search"
+                id="map-history-compare-input"
+                placeholder="Localidad o país"
+                autocomplete="off"
+              >
+              <button type="button" id="map-history-compare-search">
+                Buscar
+              </button>
+            </div>
+            <p class="map-history-compare-hint">
+              Al buscar un país se ofrecen localidades del catálogo, no un promedio nacional.
+            </p>
+            <div
+              id="map-history-compare-results"
+              class="map-history-compare-results"
+            ></div>
+            <button type="button" id="map-history-compare-load" disabled>
+              Comparar regiones
+            </button>
+          </div>
+          <div
+            id="map-history-comparison"
+            class="map-history-comparison"
+            aria-live="polite"
+          ></div>
+          <p id="map-history-status" class="map-history-status" aria-live="polite">
+            Seleccioná una localidad o una celda del mapa para analizarla.
+          </p>
+          <div id="map-history-summary" class="map-history-summary"></div>
+          <div class="map-history-charts" id="map-history-charts" hidden>
+            <div class="map-history-chart-card">
+              <h5>Anomalía térmica · °C</h5>
+              <div id="map-temperature-history-chart"></div>
+            </div>
+            <div class="map-history-chart-card">
+              <h5>Anomalía de precipitación · %</h5>
+              <div id="map-precipitation-history-chart"></div>
+            </div>
+          </div>
+          <p class="map-history-source" id="map-history-source">
+            Los valores históricos se consultan al analizar la zona seleccionada.
+          </p>
+        </section>
+
+        <p class="map-data-source">
+          El mapa separa condiciones actuales estimadas por Open-Meteo de
+          anomalías y tendencias calculadas con su archivo histórico de
+          reanálisis.
+        </p>
+      </aside>
+
+    </div>
+
+  </section>
+
+  <!-- INVESTIGACIONES -->
+  <section id="investigations" class="dashboard-section">
+    <div class="section-heading">
+      <div>
+        <span class="section-label">03 / EXPLORACIÓN</span>
+        <h2>Herramientas de investigación</h2>
+        <p>Distintas formas de estudiar el comportamiento del clima.</p>
+      </div>
+    </div>
+
+    <div class="tools-grid">
+
+      <a
+        class="tool-card research-center-link"
+        href="{{ url_for('research_center.index') }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Abrir el Centro de investigaciones de Memoria climática"
+      >
+        <div class="tool-icon">◉</div>
+        <span class="tool-number">MÓDULO 01 · APARTADO 04</span>
+        <h3>Centro de investigaciones</h3>
+        <p>
+          Investigá la evolución del clima, compará regiones y descubrí
+          patrones en los registros históricos de ClimaIA.
+        </p>
+        <span class="tool-status">ABRIR CENTRO DE INVESTIGACIONES</span>
+      </a>
+
+      <a
+        class="tool-card featured-tool territory-tool-link"
+        href="{{ url_for('territory.index') }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Abrir Memoria del Territorio en una pestaña nueva"
+      >
+        <div class="tool-icon">⌘</div>
+        <span class="tool-number">MÓDULO 02</span>
+        <h3>Memoria del Territorio</h3>
+        <p>
+          Explorá mosaicos satelitales reales y compará fechas
+          para estudiar la memoria de cada región.
+        </p>
+        <span class="tool-status">ABRIR EXPLORADOR SATELITAL</span>
+      </a>
+
+      <a
+        class="tool-card connection-tool"
+        href="{{ url_for('main.climate_connections') }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Abrir el módulo de conexiones climáticas en una pestaña nueva"
+      >
+        <div class="tool-icon">⌁</div>
+        <span class="tool-number">MÓDULO 03</span>
+        <h3>Conexiones climáticas</h3>
+        <p>
+          Compará regiones y buscá similitudes, diferencias
+          y patrones en sus comportamientos meteorológicos.
+        </p>
+        <span class="tool-status">BUSCAR SIMILITUDES</span>
+      </a>
+
+      <article class="tool-card">
+        <div class="tool-icon">✳</div>
+        <span class="tool-number">MÓDULO 04</span>
+        <h3>Análisis visual y climático</h3>
+        <p>
+          Interpretá resultados, detectá anomalías y generá
+          informes basados en evidencia climática.
+        </p>
+        <a class="tool-status investigation-link" href="{{ url_for('investigations.index') }}">
+          ABRIR INVESTIGACIÓN
+        </a>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- PERFIL -->
+  <section id="profile" class="dashboard-section profile-section">
+    <div class="section-heading">
+      <div>
+        <span class="section-label">05 / CUENTA</span>
+        <h2>Perfil de investigador</h2>
+        <p>Información de tu espacio personal.</p>
+      </div>
+    </div>
+
+    <div class="profile-card">
+      <div class="profile-avatar">
+        {{ user.username[0]|upper }}
+      </div>
+
+      <div class="profile-information">
+        <h3>{{ user.username }}</h3>
+        <p>{{ user.email }}</p>
+      </div>
+
+      <div class="profile-access">
+        <span>NIVEL DE ACCESO</span>
+        <strong>{{ user.role }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIE -->
+  <footer class="dashboard-footer">
+    <strong>CLIMAIA.</strong>
+    <span>GLOBAL CLIMATE INTELLIGENCE</span>
+    <span>El planeta tiene memoria.</span>
+  </footer>
+
+</main>
+
+<style>
+.clima-dashboard {
+  --bg: #080e1c;
+  --panel: #101c30;
+  --panel-light: #14243b;
+  --border: #263a57;
+  --text: #edf3ff;
+  --muted: #91a5c1;
+  --blue: #91a8ff;
+  --cyan: #65d5f5;
+  width: min(1160px, 91%);
+  margin: 0 auto;
+  padding: 55px 0 30px;
+  color: var(--text);
+}
+
+.clima-dashboard * {
+  box-sizing: border-box;
+}
+
+.welcome-section {
+  min-height: 0;
+  padding: 42px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 26px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 85% 50%, #263e72 0%, transparent 35%),
+    linear-gradient(120deg, #111e34, #0c1426);
+}
+
+.section-label {
+  color: var(--cyan);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.3px;
+}
+
+.welcome-section h1 {
+  font-size: clamp(32px, 5vw, 49px);
+  line-height: 1.12;
+  margin: 18px 0;
+  letter-spacing: -1.8px;
+}
+
+.welcome-section h1 span {
+  color: var(--blue);
+}
+
+.welcome-text {
+  max-width: 590px;
+  color: #aebed4;
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+.observatory-widget {
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #355273;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 20% 5%, #1a40604d, transparent 42%),
+    linear-gradient(145deg, #0d1a2c, #091323);
+  box-shadow: 0 15px 40px #02071166;
+}
+
+.observatory-heading,
+.observatory-live,
+.observatory-temperature,
+.observatory-ai-form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.observatory-heading h2 {
+  margin-top: 5px;
+  font-size: 15px;
+  letter-spacing: -.2px;
+}
+
+.observatory-live {
+  flex-shrink: 0;
+  justify-content: flex-start;
+  color: #a7e5c4;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.observatory-live i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #54d89a;
+  box-shadow: 0 0 10px #54d89a99;
+}
+
+.observatory-main {
+  display: grid;
+  grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.observatory-globe-column {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+}
+
+.observatory-globe {
+  width: min(300px, 100%);
+  aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #81b9dd77;
+  border-radius: 50%;
+  background: #07162b;
+  box-shadow:
+    inset -14px -10px 22px #020916aa,
+    0 13px 25px #02071188,
+    0 0 32px #42a8e933;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.observatory-globe.is-dragging {
+  cursor: grabbing;
+}
+
+.observatory-globe-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.observatory-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.observatory-marker {
+  width: 11px;
+  height: 11px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 2px solid #f4fbff;
+  border-radius: 50%;
+  background: var(--marker-color, #63d7f5);
+  box-shadow: 0 0 0 4px #75d7ff32, 0 0 13px var(--marker-color, #63d7f5);
+  cursor: pointer;
+  transition: width .18s, height .18s, box-shadow .18s;
+}
+
+.observatory-marker:hover,
+.observatory-marker.is-selected {
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  box-shadow: 0 0 0 6px #75d7ff42, 0 0 18px var(--marker-color, #63d7f5);
+}
+
+.observatory-marker:focus-visible,
+.observatory-region-button:focus-visible,
+.observatory-ai-form button:focus-visible {
+  outline: 2px solid #d5f5ff;
+  outline-offset: 3px;
+}
+
+.observatory-globe-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 29% 18%, #effaff24, transparent 34%),
+    linear-gradient(120deg, #c8efff12, transparent 43%, #020a194a 88%);
+  box-shadow:
+    inset 9px 8px 18px #e6f8ff12,
+    inset -13px -10px 22px #01081772;
+}
+
+.observatory-globe-hint {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.observatory-reading {
+  min-width: 0;
+}
+
+.observatory-region {
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.observatory-reading h3 {
+  overflow-wrap: anywhere;
+  margin: 6px 0 8px;
+  font-size: 14px;
+}
+
+.observatory-temperature {
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.observatory-temperature strong {
+  color: #f2f7ff;
+  font-size: 32px;
+  letter-spacing: -1px;
+}
+
+.observatory-temperature span,
+.observatory-metrics span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.observatory-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.observatory-metrics div {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 1px solid #263a574f;
+  border-radius: 7px;
+  background: #0c192b;
+}
+
+.observatory-metrics strong {
+  font-size: 10px;
+}
+
+.observatory-metrics small {
+  color: #8298b8;
+  font-size: 8px;
+}
+
+.observatory-time {
+  display: block;
+  margin-top: 8px;
+  color: #8297b4;
+  font-size: 8px;
+}
+
+.observatory-anomaly {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  margin-top: 11px;
+  padding: 8px 9px;
+  border: 1px solid #ef8f5b50;
+  border-radius: 8px;
+  background: #a345291c;
+}
+
+.observatory-anomaly span {
+  color: #f2b28f;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+.observatory-anomaly strong {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: #ffd1a8;
+  font-size: 16px;
+}
+
+.observatory-anomaly small {
+  color: #b6a394;
+  font-size: 8px;
+}
+
+.observatory-regions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 13px;
+}
+
+.observatory-region-button {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid #263a57;
+  border-radius: 7px;
+  background: #0b1728;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.observatory-region-button:hover,
+.observatory-region-button.is-selected {
+  border-color: #6bbbd6;
+  background: #142a40;
+}
+
+.observatory-region-button small,
+.observatory-region-button span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.observatory-region-button small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.observatory-region-button span {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.observatory-location-search {
+  margin-top: 12px;
+}
+
+.observatory-location-search label {
+  display: block;
+  margin-bottom: 6px;
+  color: #a9bad1;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.observatory-location-search form {
+  display: flex;
+  gap: 7px;
+}
+
+.observatory-location-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #304762;
+  border-radius: 7px;
+  outline: none;
+  background: #071323;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.observatory-location-search input:focus {
+  border-color: var(--cyan);
+}
+
+.observatory-location-search form button {
+  padding: 0 13px;
+  border: 1px solid #5677b8;
+  border-radius: 7px;
+  background: #233d65;
+  color: #f0f5ff;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.observatory-location-search form button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.observatory-location-search > p {
+  margin-top: 5px;
+  color: #8498b2;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.observatory-search-results {
+  display: grid;
+  gap: 5px;
+  max-height: 150px;
+  margin-top: 7px;
+  overflow: auto;
+}
+
+.observatory-search-result {
+  padding: 8px 9px;
+  border: 1px solid #263a57;
+  border-radius: 7px;
+  background: #0c192b;
+  color: #dce8f7;
+  font-size: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.observatory-search-result:hover,
+.observatory-search-result:focus-visible {
+  border-color: #6bbbd6;
+  background: #142a40;
+}
+
+.observatory-search-results:empty {
+  display: none;
+}
+
+.observatory-ai-form {
+  margin-top: 10px;
+}
+
+.observatory-ai-form button {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #5677b8;
+  border-radius: 8px;
+  background: linear-gradient(100deg, #334d82, #243e68);
+  color: #f0f5ff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.observatory-ai-form button:hover:not(:disabled) {
+  background: linear-gradient(100deg, #42619e, #315486);
+}
+
+.observatory-ai-form button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.observatory-ai-report,
+.observatory-ai-error {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #67bad650;
+  border-radius: 8px;
+  background: #11253a;
+}
+
+.observatory-ai-report p,
+.observatory-ai-error {
+  color: #cad7e9;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.observatory-ai-report-content {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  color: #cad7e9;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.observatory-ai-report-content p {
+  margin: 0;
+}
+
+.observatory-ai-report-content ul,
+.observatory-ai-report-content ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 21px;
+}
+
+.observatory-ai-report-content li::marker {
+  color: var(--cyan);
+}
+
+.observatory-ai-report-content strong {
+  color: #f0f4ff;
+}
+
+.observatory-ai-report-content .report-section-card {
+  padding: 12px;
+  border: 1px solid #67bad633;
+  border-radius: 9px;
+  background: #0c1b2d;
+}
+
+.observatory-ai-report-content .report-section-card h2,
+.observatory-ai-report-content .report-section-card h3 {
+  margin: 0 0 8px;
+  color: #e8efff;
+  font-size: 11px;
+}
+
+.observatory-ai-report-content .report-section-card h2 {
+  padding-bottom: 7px;
+  border-bottom: 1px solid #263a57;
+}
+
+.observatory-ai-error {
+  border-color: #e8797950;
+  background: #3b202733;
+  color: #ffb9b9;
+}
+
+.observatory-empty {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.observatory-source {
+  margin-top: 9px;
+  color: #7e91aa;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.dashboard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  padding: 22px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+  transition: color .2s;
+}
+
+.dashboard-nav a:hover {
+  color: var(--cyan);
+}
+
+.dashboard-section {
+  padding-top: 55px;
+  scroll-margin-top: 25px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.section-heading h2 {
+  font-size: 26px;
+  margin: 10px 0 6px;
+}
+
+.section-heading p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.status-tag,
+.tool-status {
+  display: inline-block;
+  border: 1px solid #3c5c7d;
+  color: #91c9f5;
+  border-radius: 30px;
+  padding: 7px 11px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.metric-card,
+.tool-card {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--panel);
+  padding: 22px;
+}
+
+.metric-card {
+  min-height: 170px;
+  transition: transform .2s, border-color .2s;
+}
+
+.metric-card:hover,
+.tool-card:hover {
+  transform: translateY(-3px);
+  border-color: #6685d1;
+}
+
+.metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #b7c6db;
+  font-size: 12px;
+}
+
+.metric-icon {
+  font-size: 19px;
+  color: var(--cyan);
+}
+
+.metric-value {
+  display: block;
+  font-size: 35px;
+  margin: 16px 0 4px;
+  color: #dbe4ff;
+}
+
+.metric-card p {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.metric-line {
+  height: 2px;
+  width: 45%;
+  margin-top: 15px;
+  background: linear-gradient(90deg, var(--blue), transparent);
+}
+
+.weather-update {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.weather-error {
+  margin-top: 18px;
+  color: #ffaaaa;
+  font-size: 12px;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.tool-card {
+  min-height: 225px;
+  transition: transform .2s, border-color .2s;
+}
+
+.connection-tool,
+.territory-tool-link,
+.research-center-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.connection-tool:focus-visible,
+.territory-tool-link:focus-visible,
+.research-center-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+.featured-tool {
+  background:
+    radial-gradient(circle at 90% 15%, #314b7b55, transparent 50%),
+    var(--panel);
+  border-color: #526ba0;
+}
+
+.tool-icon {
+  color: var(--cyan);
+  font-size: 27px;
+  margin-bottom: 20px;
+}
+
+.tool-number {
+  display: block;
+  color: #7791b9;
+  font-size: 9px;
+  letter-spacing: 1.7px;
+  font-weight: bold;
+}
+
+.tool-card h3 {
+  font-size: 19px;
+  margin: 9px 0;
+}
+
+.tool-card p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  max-width: 440px;
+  min-height: 43px;
+}
+
+.tool-status {
+  margin-top: 10px;
+}
+
+.investigation-link {
+  text-decoration: none;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 25px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.profile-avatar {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  font-size: 23px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #829dff, #4565b7);
+}
+
+.profile-information {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-information h3 {
+  margin: 0 0 5px;
+  font-size: 16px;
+}
+
+.profile-information p {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
+.profile-access {
+  display: grid;
+  gap: 7px;
+  text-align: right;
+}
+
+.profile-access span {
+  color: var(--cyan);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.profile-access strong {
+  font-size: 12px;
+  color: #dce7ff;
+}
+
+.dashboard-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  border-top: 1px solid var(--border);
+  margin-top: 65px;
+  padding: 25px 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.dashboard-footer strong {
+  color: var(--blue);
+  font-size: 17px;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 850px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .global-cities-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .clima-dashboard {
+    padding-top: 25px;
+  }
+
+  .welcome-section {
+    padding: 27px;
+  }
+
+  .welcome-section h1 {
+    font-size: 34px;
+  }
+
+  .observatory-widget {
+    padding: 13px;
+  }
+
+  .observatory-main {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .observatory-globe {
+    width: min(250px, 100%);
+  }
+
+  .observatory-regions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-nav {
+    gap: 17px;
+  }
+
+  .section-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .metrics-grid,
+  .tools-grid,
+  .global-summary-grid,
+  .global-cities-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .global-cities-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .global-history-card {
+    padding: 17px;
+  }
+
+  .profile-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .profile-access {
+    width: 100%;
+    text-align: left;
+    padding-left: 72px;
+  }
+}
+
+
+/* PANORAMA GLOBAL */
+.global-section {
+  scroll-margin-top: 25px;
+}
+
+.global-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 16px;
+}
+
+.global-highlight-card,
+.global-history-card,
+.global-city-card,
+.global-error-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.global-highlight-card {
+  padding: 23px;
+  min-height: 170px;
+  background:
+    radial-gradient(circle at 95% 5%, #344d7a55, transparent 48%),
+    var(--panel);
+}
+
+.global-card-top,
+.global-card-heading,
+.global-city-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.global-card-top {
+  color: #b7c6db;
+  font-size: 12px;
+}
+
+.global-symbol {
+  color: var(--cyan);
+  font-size: 20px;
+}
+
+.global-main-value {
+  display: block;
+  color: #dbe4ff;
+  font-size: clamp(30px, 4vw, 39px);
+  margin: 17px 0 5px;
+  letter-spacing: -1px;
+}
+
+.global-highlight-card p,
+.global-card-heading p,
+.global-cities-heading p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 5px 0 12px;
+}
+
+.global-source {
+  color: #7f9bc3;
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.global-history-card {
+  padding: 24px;
+  margin-bottom: 42px;
+  overflow: hidden;
+}
+
+.global-card-heading {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.global-card-heading h3,
+.global-cities-heading h3 {
+  margin: 8px 0 5px;
+  font-size: 18px;
+}
+
+.global-card-heading p,
+.global-cities-heading p {
+  margin-bottom: 0;
+}
+
+.chart-unit {
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.global-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  min-height: 150px;
+  padding: 15px 5px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid #344966;
+}
+
+.global-bar-column {
+  flex: 1 0 22px;
+  min-width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.global-bar-value {
+  color: #9eb5d6;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.global-bar-track {
+  height: 100px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.global-bar {
+  width: min(100%, 17px);
+  min-height: 8px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--cyan), #526fc1);
+  box-shadow: 0 0 12px #65d5f522;
+  transition: opacity .2s;
+}
+
+.global-bar-column:hover .global-bar {
+  opacity: .7;
+}
+
+.global-bar-year {
+  color: #8fa4c2;
+  font-size: 8px;
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+
+.chart-note,
+.global-data-note {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  margin: 15px 0 0;
+}
+
+.global-cities-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.global-live-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #9eb5d6;
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.global-live-label span,
+.global-city-dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 50%;
+  background: #65d5a6;
+  box-shadow: 0 0 9px #65d5a688;
+}
+
+.global-cities-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.global-city-card {
+  padding: 19px;
+  min-width: 0;
+  transition: transform .2s, border-color .2s;
+}
+
+.global-city-card:hover {
+  transform: translateY(-3px);
+  border-color: #6685d1;
+}
+
+.global-city-region {
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.global-city-card h4 {
+  color: var(--text);
+  font-size: 17px;
+  margin: 13px 0 2px;
+}
+
+.global-city-temperature {
+  display: block;
+  color: #dbe4ff;
+  font-size: 34px;
+  margin: 4px 0 15px;
+}
+
+.global-city-details {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 8px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.global-city-details div {
+  display: grid;
+  gap: 5px;
+}
+
+.global-city-details span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.global-city-details strong {
+  color: #dce7ff;
+  font-size: 11px;
+}
+
+.global-city-time {
+  color: #8198b8;
+  font-size: 9px;
+  line-height: 1.5;
+  margin: 15px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.global-data-note {
+  margin-top: 17px;
+}
+
+.global-warning {
+  color: #e8c58b;
+  font-size: 11px;
+  margin-top: 15px;
+}
+
+.global-error-card {
+  padding: 20px;
+  border-color: #79535a;
+}
+
+.global-error-card strong {
+  color: #ffcccc;
+  font-size: 13px;
+}
+
+.global-error-card p,
+.global-empty {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ATLAS CLIMÁTICO MUNDIAL */
+
+.world-map-section {
+  scroll-margin-top: 25px;
+}
+
+.map-search-panel {
+  padding: 24px;
+  margin-bottom: 17px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.map-search-heading h3 {
+  margin: 10px 0 6px;
+  font-size: 19px;
+}
+
+.map-search-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.map-search-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.map-search-controls input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 15px;
+  color: var(--text);
+  background: #091426;
+  border: 1px solid #344966;
+  border-radius: 9px;
+  outline: none;
+  font-size: 12px;
+}
+
+.map-search-controls input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px #65d5f51a;
+}
+
+.map-search-controls button {
+  padding: 0 20px;
+  border: 1px solid #6b91ed;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #587bd2, #405ca5);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.map-search-controls button:hover {
+  filter: brightness(1.15);
+}
+
+.map-message {
+  min-height: 15px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.map-search-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.map-result-item {
+  width: 100%;
+  padding: 13px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #14243b;
+  border: 1px solid #344966;
+  border-radius: 9px;
+  color: var(--text);
+  cursor: pointer;
+  transition: .2s;
+}
+
+.map-result-item:hover {
+  border-color: var(--cyan);
+  background: #1a304e;
+}
+
+.map-result-item strong {
+  font-size: 12px;
+}
+
+.map-result-item span {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.world-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(240px, .8fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.world-map-container {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+#climate-world-map {
+  width: 100%;
+  height: 460px;
+  background: #101c30;
+  z-index: 1;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 17px;
+  padding: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.local-dot {
+  background: #65d5a6;
+}
+
+.global-dot {
+  background: #91a8ff;
+}
+
+.selected-dot {
+  background: #ffca75;
+}
+
+.map-information-panel {
+  padding: 23px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.map-information-panel h3 {
+  margin: 16px 0 5px;
+  font-size: 21px;
+  overflow-wrap: anywhere;
+}
+
+.map-location-country {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.map-weather-information {
+  margin-top: 23px;
+}
+
+.map-empty-state {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+}
+
+.map-empty-state span {
+  font-size: 38px;
+  color: var(--cyan);
+}
+
+.map-empty-state p {
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.map-weather-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.map-weather-item {
+  padding: 13px;
+  background: #14243b;
+  border: 1px solid #2c405d;
+  border-radius: 9px;
+}
+
+.map-weather-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-bottom: 8px;
+}
+
+.map-weather-item strong {
+  color: #e1eaff;
+  font-size: 18px;
+}
+
+.map-weather-time {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.6;
+  margin-top: 15px;
+}
+
+.map-data-source {
+  margin-top: 20px;
+  color: #8298b8;
+  font-size: 9px;
+  line-height: 1.7;
+}
+
+#climate-world-map .leaflet-popup-content-wrapper,
+#climate-world-map .leaflet-popup-tip {
+  background: #14243b;
+  color: #edf3ff;
+}
+
+#climate-world-map .leaflet-popup-content {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+#climate-world-map .leaflet-control-zoom a {
+  background: #14243b;
+  color: #edf3ff;
+  border-color: #344966;
+}
+
+#climate-world-map .leaflet-control-attribution {
+  background: #101c30dd;
+  color: #b4c5df;
+}
+
+#climate-world-map .leaflet-control-attribution a {
+  color: var(--cyan);
+}
+
+@media (max-width: 800px) {
+  .world-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #climate-world-map {
+    height: 380px;
+  }
+}
+
+@media (max-width: 550px) {
+  .map-search-controls {
+    flex-direction: column;
+  }
+
+  .map-search-controls button {
+    min-height: 43px;
+  }
+
+  #climate-world-map {
+    height: 320px;
+  }
+
+  .map-result-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .map-result-item span {
+    text-align: left;
+  }
+}
+
+
+/* CAPAS DEL ATLAS CLIMÁTICO */
+
+.map-layer-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 22px;
+  margin-bottom: 17px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.map-layer-description h3 {
+  margin: 9px 0 6px;
+  font-size: 18px;
+}
+
+.map-layer-description p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.map-layer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.map-layer-controls label {
+  color: #b7c6db;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.map-layer-controls select {
+  width: 100%;
+  padding: 12px;
+  color: var(--text);
+  background: #091426;
+  border: 1px solid #344966;
+  border-radius: 9px;
+  outline: none;
+  font-size: 12px;
+}
+
+.map-layer-controls select:focus {
+  border-color: var(--cyan);
+}
+
+.map-period-control {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #2c405d;
+  border-radius: 9px;
+  background: #0b1729;
+}
+
+.map-period-control[hidden] {
+  display: none;
+}
+
+.map-period-control small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.map-layer-controls button {
+  padding: 12px;
+  color: white;
+  background: linear-gradient(135deg, #587bd2, #405ca5);
+  border: 1px solid #6b91ed;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.map-layer-controls button:hover {
+  filter: brightness(1.15);
+}
+
+.map-layer-status {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.map-layer-legend {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.map-layer-gradient {
+  flex: 1;
+  min-width: 100px;
+  height: 9px;
+  border-radius: 20px;
+  background: linear-gradient(
+    90deg,
+    hsl(220, 85%, 55%),
+    hsl(160, 85%, 55%),
+    hsl(60, 85%, 55%),
+    hsl(0, 85%, 55%)
+  );
+}
+
+.map-layer-value {
+  color: #dce7ff;
+  font-weight: 700;
+}
+
+.map-history-panel {
+  margin-top: 23px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.map-history-heading .section-label {
+  font-size: 8px;
+}
+
+.map-history-heading h4 {
+  margin: 7px 0 5px;
+  color: #e8efff;
+  font-size: 14px;
+}
+
+.map-history-heading p,
+.map-history-status,
+.map-history-source {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.map-history-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.map-history-controls label {
+  display: grid;
+  gap: 5px;
+  color: #b7c6db;
+  font-size: 9px;
+}
+
+.map-history-controls select,
+.map-history-controls button {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #344966;
+  border-radius: 7px;
+  background: #091426;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.map-history-controls button {
+  grid-column: 1 / -1;
+  border-color: #6b91ed;
+  background: linear-gradient(135deg, #587bd2, #405ca5);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.map-history-controls button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.map-history-compare-controls {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.map-history-compare-controls > label {
+  color: #b7c6db;
+  font-size: 9px;
+}
+
+.map-history-compare-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.map-history-compare-search input,
+.map-history-compare-search button,
+#map-history-compare-load {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #344966;
+  border-radius: 7px;
+  background: #091426;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.map-history-compare-search button,
+#map-history-compare-load {
+  border-color: #5277bb;
+  cursor: pointer;
+}
+
+#map-history-compare-load {
+  background: #173b54;
+  font-weight: 700;
+}
+
+#map-history-compare-load:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.map-history-compare-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.map-history-compare-results {
+  display: grid;
+  gap: 5px;
+}
+
+.map-history-compare-results:empty {
+  display: none;
+}
+
+.map-history-compare-result {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid #2c405d;
+  border-radius: 7px;
+  background: #0b1729;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-history-compare-result span {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.map-history-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.map-history-comparison:empty {
+  display: none;
+}
+
+.map-history-comparison-delta {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid #375a70;
+  border-radius: 8px;
+  background: #102b3c;
+  color: #d7efff;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.map-history-comparison-location {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #2c405d;
+  border-radius: 8px;
+  background: #0b1729;
+}
+
+.map-history-comparison-location h5 {
+  margin: 0 0 7px;
+  color: #dce7ff;
+  font-size: 10px;
+}
+
+.map-history-comparison-location p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.map-history-status {
+  min-height: 16px;
+  margin: 10px 0;
+}
+
+.map-history-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.map-history-summary:empty {
+  display: none;
+}
+
+.map-history-stat {
+  padding: 9px;
+  border: 1px solid #2c405d;
+  border-radius: 8px;
+  background: #14243b;
+}
+
+.map-history-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.map-history-stat strong {
+  display: block;
+  margin-top: 5px;
+  color: #edf3ff;
+  font-size: 13px;
+}
+
+.map-history-charts {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.map-history-charts[hidden] {
+  display: none;
+}
+
+.map-history-chart-card {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #2c405d;
+  border-radius: 8px;
+  background: #0b1729;
+}
+
+.map-history-chart-card h5 {
+  margin: 0 0 8px;
+  color: #dce7ff;
+  font-size: 9px;
+}
+
+.map-history-chart-card svg {
+  display: block;
+  width: 100%;
+  height: 100px;
+  overflow: visible;
+}
+
+.map-history-source {
+  margin-top: 9px;
+  font-size: 8px;
+}
+
+@media (max-width: 650px) {
+  .map-layer-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .map-history-comparison {
+    grid-template-columns: 1fr;
+  }
+}
+
+</style>
+
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+>
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  const mapElement = document.getElementById("climate-world-map");
+
+  if (!mapElement || typeof L === "undefined") {
+    const message = document.getElementById("map-search-message");
+    if (message) {
+      message.textContent = "No se pudo cargar el mapa. Revisá tu conexión a internet.";
+    }
+    return;
+  }
+
+  const map = L.map("climate-world-map", {
+    worldCopyJump: true
+  }).setView([-15, -25], 2);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const markersLayer = L.layerGroup().addTo(map);
+
+  // Capas de información climática.
+  map.createPane("climatePane");
+  map.getPane("climatePane").style.zIndex = 350;
+
+  const climateGridLayer = L.layerGroup().addTo(map);
+
+  let climateGridData = null;
+
+  const climateLayerSelect = document.getElementById(
+    "climate-layer-select"
+  );
+
+  const climateLayerRefresh = document.getElementById(
+    "map-layer-refresh"
+  );
+
+  const climateLayerStatus = document.getElementById(
+    "map-layer-status"
+  );
+
+  const climateLayerLegend = document.getElementById(
+    "climate-layer-legend"
+  );
+  const climatePeriodControl = document.getElementById(
+    "map-period-control"
+  );
+  const climatePeriodYear = document.getElementById("climate-period-year");
+  const historyStartYear = document.getElementById("map-history-start-year");
+  const historyEndYear = document.getElementById("map-history-end-year");
+  const historyLoadButton = document.getElementById("map-history-load");
+  const historyStatus = document.getElementById("map-history-status");
+  const historySummary = document.getElementById("map-history-summary");
+  const historyCharts = document.getElementById("map-history-charts");
+  const temperatureHistoryChart = document.getElementById(
+    "map-temperature-history-chart"
+  );
+  const precipitationHistoryChart = document.getElementById(
+    "map-precipitation-history-chart"
+  );
+  const historySource = document.getElementById("map-history-source");
+  const historyCompareInput = document.getElementById(
+    "map-history-compare-input"
+  );
+  const historyCompareSearch = document.getElementById(
+    "map-history-compare-search"
+  );
+  const historyCompareResults = document.getElementById(
+    "map-history-compare-results"
+  );
+  const historyCompareLoad = document.getElementById(
+    "map-history-compare-load"
+  );
+  const historyComparison = document.getElementById(
+    "map-history-comparison"
+  );
+
+
+  let selectedMarker = null;
+  let currentClimateGridData = null;
+  let anomalyGridData = null;
+  let anomalyGridYear = null;
+  let selectedClimateLocation = null;
+  let comparisonClimateLocation = null;
+  const regionalProfileCache = new Map();
+
+  const searchInput = document.getElementById("map-location-input");
+  const searchButton = document.getElementById("map-search-button");
+  const searchMessage = document.getElementById("map-search-message");
+  const searchResults = document.getElementById("map-search-results");
+
+  const selectedName = document.getElementById("selected-location-name");
+  const selectedCountry = document.getElementById("selected-location-country");
+  const weatherInformation = document.getElementById("map-weather-information");
+
+  // Ciudades de referencia del panorama global.
+  const referenceCities = [
+    { name: "Nueva York", country: "Estados Unidos", lat: 40.7128, lon: -74.0060 },
+    { name: "São Paulo", country: "Brasil", lat: -23.5505, lon: -46.6333 },
+    { name: "Londres", country: "Reino Unido", lat: 51.5072, lon: -0.1276 },
+    { name: "Nairobi", country: "Kenia", lat: -1.2921, lon: 36.8219 },
+    { name: "Tokio", country: "Japón", lat: 35.6762, lon: 139.6503 },
+    { name: "Sídney", country: "Australia", lat: -33.8688, lon: 151.2093 }
+  ];
+
+
+// --------------------------------------------------
+// ATLAS CLIMÁTICO: CARGA DE DATOS
+// --------------------------------------------------
+
+const latestCompleteYear = new Date().getUTCFullYear() - 1;
+const anomalyGridCache = new Map();
+let archiveRetryUntil = 0;
+let archiveRetryTimer = null;
+let archiveRetryYear = null;
+let archiveAutoRetryCount = 0;
+
+function registerArchiveRateLimit(response, data) {
+  if (response.status !== 429) return false;
+
+  const retryAfter = Number(
+    response.headers.get("Retry-After")
+      || data.retry_after_seconds
+      || 300
+  );
+  archiveRetryUntil = Date.now()
+    + (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 300) * 1000;
+  return true;
+}
+
+function archiveRetryMessage() {
+  const remainingMilliseconds = archiveRetryUntil - Date.now();
+  if (remainingMilliseconds <= 0) return null;
+
+  const remainingMinutes = Math.ceil(remainingMilliseconds / 60000);
+  return (
+    "Open-Meteo limitó temporalmente las consultas. " +
+    `Esperá aproximadamente ${remainingMinutes} min antes de reintentar.`
+  );
+}
+
+function scheduleArchiveRetry(year) {
+  if (archiveAutoRetryCount >= 1) return;
+
+  const selectedYear = Number(year);
+  if (archiveRetryTimer && archiveRetryYear === selectedYear) return;
+  if (archiveRetryTimer) {
+    clearTimeout(archiveRetryTimer);
+  }
+  archiveRetryYear = selectedYear;
+  const delay = Math.max(1000, archiveRetryUntil - Date.now() + 1000);
+  archiveRetryTimer = setTimeout(function () {
+    archiveRetryTimer = null;
+    archiveRetryYear = null;
+    if (
+      isHistoricalLayer(climateLayerSelect.value)
+      && Number(climatePeriodYear.value) === selectedYear
+    ) {
+      archiveAutoRetryCount += 1;
+      loadClimateAnomalies(selectedYear, false, true);
+    }
+  }, delay);
+}
+
+function clearArchiveRetry() {
+  archiveRetryUntil = 0;
+  archiveAutoRetryCount = 0;
+  if (archiveRetryTimer) {
+    clearTimeout(archiveRetryTimer);
+    archiveRetryTimer = null;
+  }
+  archiveRetryYear = null;
+}
+
+function populateYearSelect(select, selectedYear) {
+  for (let year = 1991; year <= latestCompleteYear; year += 1) {
+    const option = document.createElement("option");
+    option.value = String(year);
+    option.textContent = String(year);
+    select.appendChild(option);
+  }
+  select.value = String(selectedYear);
+}
+
+populateYearSelect(climatePeriodYear, latestCompleteYear);
+populateYearSelect(historyStartYear, 1991);
+populateYearSelect(historyEndYear, latestCompleteYear);
+
+function isHistoricalLayer(variable) {
+  return [
+    "temperature_mean",
+    "precipitation_total",
+    "temperature_anomaly",
+    "precipitation_anomaly",
+    "temperature_trend",
+    "precipitation_trend"
+  ].includes(variable);
+}
+
+async function loadClimateGrid(forceRefresh = false) {
+
+  if (!isHistoricalLayer(climateLayerSelect.value)) {
+    climateLayerStatus.textContent =
+      "Consultando condiciones actuales del modelo Open-Meteo...";
+  }
+
+  climateLayerRefresh.disabled = true;
+
+  try {
+
+    const endpoint = forceRefresh
+      ? "/api/atlas/grid?refresh=1"
+      : "/api/atlas/grid";
+
+    const response = await fetch(endpoint);
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error || "No se pudo cargar el atlas."
+      );
+    }
+
+    currentClimateGridData = data.points;
+
+    if (!isHistoricalLayer(climateLayerSelect.value)) {
+      climateGridData = currentClimateGridData;
+      drawClimateLayer(climateLayerSelect.value);
+
+      climateLayerStatus.textContent =
+        "Grilla de 72 puntos cargada. " +
+        "Fuente: " + data.source +
+        (data.cached
+          ? " · Datos reutilizados desde caché."
+          : " · Respuesta recién consultada.");
+    }
+
+  } catch (error) {
+
+    if (!isHistoricalLayer(climateLayerSelect.value)) {
+      climateLayerStatus.textContent = error.message;
+    }
+
+  } finally {
+
+    climateLayerRefresh.disabled = false;
+
+  }
+}
+
+async function loadClimateAnomalies(
+  year,
+  forceRefresh = false,
+  automaticRetry = false
+) {
+  if (!automaticRetry) {
+    archiveAutoRetryCount = 0;
+  }
+
+  const cachedData = anomalyGridCache.get(year);
+  if (cachedData && !forceRefresh) {
+    clearArchiveRetry();
+    anomalyGridData = cachedData.points;
+    anomalyGridYear = year;
+    climateGridData = anomalyGridData;
+    drawClimateLayer(climateLayerSelect.value);
+    climateLayerStatus.textContent =
+      `Archivo Open-Meteo / reanálisis · ${year} · ` +
+      `referencia 1991-2020 · caché local.` +
+      (cachedData.stale
+        ? ` ${cachedData.warning || "Se usan datos guardados."}`
+        : "");
+    historySource.textContent = cachedData.stale
+      ? cachedData.warning || "Se muestran los últimos datos históricos guardados."
+      : "Fuente: archivo histórico Open-Meteo (reanálisis).";
+    return;
+  }
+
+  climateGridData = null;
+  climateGridLayer.clearLayers();
+  climateLayerStatus.textContent =
+    `Consultando el archivo histórico para ${year} y la referencia 1991-2020...`;
+  climateLayerRefresh.disabled = true;
+
+  try {
+    const refreshParameter = forceRefresh ? "&refresh=1" : "";
+    const response = await fetch(
+      `/api/atlas/anomalies?year=${encodeURIComponent(year)}${refreshParameter}`
+    );
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      registerArchiveRateLimit(response, data);
+      throw new Error(data.error || "No se pudieron calcular las anomalías.");
+    }
+
+    clearArchiveRetry();
+    anomalyGridData = data.points;
+    anomalyGridYear = year;
+    anomalyGridCache.set(year, {
+      points: data.points,
+      stale: Boolean(data.stale),
+      warning: data.warning || ""
+    });
+    climateGridData = anomalyGridData;
+    drawClimateLayer(climateLayerSelect.value);
+    climateLayerStatus.textContent =
+      `Archivo histórico Open-Meteo / reanálisis · ${year} · ` +
+      `referencia ${data.reference_period}. ` +
+      `Consultado: ${new Date(data.dataset_updated_at).toLocaleString()}.` +
+      (data.stale ? ` ${data.warning || "Se usaron datos guardados."}` : "");
+    historySource.textContent = data.stale
+      ? data.warning || "Se muestran los últimos datos históricos guardados."
+      : "Fuente: archivo histórico Open-Meteo (reanálisis).";
+  } catch (error) {
+    const retryMessage = archiveRetryMessage();
+    const shouldRetry = Boolean(
+      retryMessage && archiveAutoRetryCount < 1
+    );
+    climateLayerStatus.textContent = retryMessage
+      ? (
+        shouldRetry
+          ? `${retryMessage} Se reintentará una vez automáticamente.`
+          : `${retryMessage} El reintento automático ya se realizó.`
+      )
+      : error.message;
+    if (shouldRetry) {
+      scheduleArchiveRetry(year);
+    }
+    historySource.textContent =
+      "No se recibieron datos históricos del proveedor; el mapa no muestra valores estimados.";
+  } finally {
+    climateLayerRefresh.disabled = false;
+  }
+}
+
+
+// --------------------------------------------------
+// COLORES DE LAS VARIABLES
+// --------------------------------------------------
+
+function getClimateColor(value, variable) {
+
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return null;
+  }
+
+  const divergingLimits = {
+    temperature_anomaly: 4,
+    precipitation_anomaly: 100,
+    temperature_trend: 1.5,
+    precipitation_trend: 30
+  };
+
+  if (divergingLimits[variable]) {
+    const limit = divergingLimits[variable];
+    const position = Math.max(
+      0,
+      Math.min(1, (Number(value) + limit) / (limit * 2))
+    );
+    const dryPalette = variable.includes("precipitation");
+    const low = dryPalette ? [185, 112, 55] : [45, 112, 204];
+    const middle = [230, 235, 239];
+    const high = dryPalette ? [49, 126, 190] : [213, 74, 73];
+    const start = position < 0.5 ? low : middle;
+    const end = position < 0.5 ? middle : high;
+    const fraction = position < 0.5
+      ? position * 2
+      : (position - 0.5) * 2;
+    const color = start.map(
+      (channel, index) => Math.round(
+        channel + (end[index] - channel) * fraction
+      )
+    );
+
+    return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+  }
+
+  const limits = {
+    temperature: [-10, 40],
+    precipitation: [0, 10],
+    humidity: [0, 100],
+    wind_speed: [0, 100],
+    temperature_mean: [-10, 40],
+    precipitation_total: [0, 4000]
+  };
+
+  const range = limits[variable];
+
+  const minimum = range[0];
+  const maximum = range[1];
+
+  let normalized = (Number(value) - minimum) /
+    (maximum - minimum);
+
+  normalized = Math.max(0, Math.min(1, normalized));
+
+  if (variable === "temperature") {
+    const stops = [
+      { position: 0.00, color: [44, 91, 190] },
+      { position: 0.10, color: [52, 150, 214] },
+      { position: 0.30, color: [73, 190, 181] },
+      { position: 0.50, color: [244, 204, 94] },
+      { position: 0.70, color: [241, 151, 75] },
+      { position: 0.86, color: [223, 82, 69] },
+      { position: 1.00, color: [153, 48, 74] }
+    ];
+
+    let start = stops[0];
+    let end = stops[stops.length - 1];
+    for (let index = 0; index < stops.length - 1; index += 1) {
+      if (
+        normalized >= stops[index].position &&
+        normalized <= stops[index + 1].position
+      ) {
+        start = stops[index];
+        end = stops[index + 1];
+        break;
+      }
+    }
+
+    const fraction = (normalized - start.position) /
+      (end.position - start.position);
+    const color = start.color.map(
+      (channel, index) => Math.round(
+        channel + (end.color[index] - channel) * fraction
+      )
+    );
+
+    return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+
+  }
+
+  if (variable === "precipitation") {
+
+    const lightness = 90 - normalized * 45;
+
+    return "hsl(205, 90%, " + lightness + "%)";
+
+  }
+
+  if (variable === "humidity") {
+
+    const lightness = 90 - normalized * 45;
+
+    return "hsl(175, 75%, " + lightness + "%)";
+
+  }
+
+  if (variable === "wind_speed") {
+
+    const lightness = 90 - normalized * 45;
+
+    return "hsl(270, 75%, " + lightness + "%)";
+
+  }
+
+  return "#91a8ff";
+}
+
+
+// --------------------------------------------------
+// LEYENDA DE LA VARIABLE
+// --------------------------------------------------
+
+function updateClimateLegend(variable) {
+
+  const legends = {
+    temperature: {
+      title: "Temperatura actual",
+      min: "-10 °C",
+      max: "40 °C",
+      gradient: "linear-gradient(90deg, #2c5bbe 0%, #3496d6 10%, #49beb5 30%, #f4cc5e 50%, #f1974b 70%, #df5245 86%, #99304a 100%)"
+    },
+    precipitation: {
+      title: "Precipitación actual",
+      min: "0 mm",
+      max: "10 mm",
+      gradient: "linear-gradient(90deg, #d9f3ff, #398cca, #123f8a)"
+    },
+    humidity: {
+      title: "Humedad",
+      min: "0%",
+      max: "100%",
+      gradient: "linear-gradient(90deg, #d8f8f2, #159c8a, #07584e)"
+    },
+    wind_speed: {
+      title: "Viento",
+      min: "0 km/h",
+      max: "100 km/h",
+      gradient: "linear-gradient(90deg, #e6dcff, #8863c9, #442c80)"
+    },
+    temperature_mean: {
+      title: "Temperatura media anual",
+      min: "-10 °C",
+      max: "40 °C",
+      gradient: "linear-gradient(90deg, #2671cf, #e6ebef, #d54a49)"
+    },
+    precipitation_total: {
+      title: "Precipitación acumulada anual",
+      min: "0 mm",
+      max: "4.000 mm",
+      gradient: "linear-gradient(90deg, #d9f3ff, #398cca, #123f8a)"
+    },
+    temperature_anomaly: {
+      title: "Anomalía térmica · azul = frío / rojo = calor",
+      min: "-4 °C",
+      middle: "0 °C",
+      max: "+4 °C",
+      gradient: "linear-gradient(90deg, #2d70cc, #e6ebef, #d54a49)"
+    },
+    precipitation_anomaly: {
+      title: "Anomalía de precipitación · seco / húmedo",
+      min: "-100% · menos lluvia",
+      middle: "0%",
+      max: "+100% · más lluvia",
+      gradient: "linear-gradient(90deg, #b97037, #e6ebef, #317ebe)"
+    },
+    temperature_trend: {
+      title: "Tendencia térmica · °C por década",
+      min: "-1,5 °C/década",
+      middle: "0",
+      max: "+1,5 °C/década",
+      gradient: "linear-gradient(90deg, #2d70cc, #e6ebef, #d54a49)"
+    },
+    precipitation_trend: {
+      title: "Tendencia de precipitación · % por década",
+      min: "-30% · más seco",
+      middle: "0",
+      max: "+30% · más húmedo",
+      gradient: "linear-gradient(90deg, #b97037, #e6ebef, #317ebe)"
+    }
+  };
+
+  const legend = legends[variable];
+
+  climateLayerLegend.innerHTML = `
+    <span class="map-layer-value">
+      ${legend.title}
+    </span>
+    <span>${legend.min}</span>
+    ${legend.middle ? `<span>${legend.middle}</span>` : ""}
+    <div class="map-layer-gradient" style="background:${legend.gradient}"></div>
+    <span>${legend.max}</span>
+  `;
+}
+
+
+// --------------------------------------------------
+// DIBUJAR LA CAPA CLIMÁTICA
+// --------------------------------------------------
+
+function drawClimateLayer(variable) {
+
+  if (!climateGridData) {
+    return;
+  }
+
+  climateGridLayer.clearLayers();
+
+  const latitudeStep = 30;
+  const longitudeStep = 30;
+  const valueFields = {
+    temperature_trend: "temperature_trend_per_decade",
+    precipitation_trend: "precipitation_trend_pct_per_decade",
+    precipitation_anomaly: "precipitation_anomaly_pct"
+  };
+
+  climateGridData.forEach(function (point) {
+
+    const value = point[valueFields[variable] || variable];
+
+    const color = getClimateColor(value, variable);
+
+    if (color === null) {
+      return;
+    }
+
+    const south = point.latitude - latitudeStep / 2;
+    const north = point.latitude + latitudeStep / 2;
+
+    const west = point.longitude - longitudeStep / 2;
+    const east = point.longitude + longitudeStep / 2;
+
+    const rectangle = L.rectangle(
+      [
+        [south, west],
+        [north, east]
+      ],
+      {
+        pane: "climatePane",
+        stroke: false,
+        fillColor: color,
+        fillOpacity: 0.48,
+        interactive: true,
+        bubblingMouseEvents: false
+      }
+    );
+
+    const descriptions = {
+      temperature: "Temperatura actual",
+      precipitation: "Precipitación actual",
+      humidity: "Humedad relativa",
+      wind_speed: "Velocidad del viento",
+      temperature_mean: "Temperatura media anual",
+      precipitation_total: "Precipitación acumulada anual",
+      temperature_anomaly: "Anomalía de temperatura",
+      precipitation_anomaly: "Anomalía de precipitación",
+      temperature_trend: "Tendencia térmica por década",
+      precipitation_trend: "Tendencia de precipitación por década"
+    };
+
+    const units = {
+      temperature: "°C",
+      precipitation: "mm",
+      humidity: "%",
+      wind_speed: "km/h",
+      temperature_mean: "°C",
+      precipitation_total: "mm/año",
+      temperature_anomaly: "°C",
+      precipitation_anomaly: "%",
+      temperature_trend: "°C/década",
+      precipitation_trend: "%/década"
+    };
+
+    rectangle.bindPopup(
+      "<strong>" + descriptions[variable] + "</strong><br>" +
+      escapeHtml(Number(value).toFixed(
+        variable.includes("precipitation") && variable.includes("anomaly")
+          ? 1
+          : 2
+      )) + " " + units[variable] + "<br>" +
+      (point.year ? "Año: " + point.year + "<br>" : "") +
+      (point.reference_period
+        ? "Referencia: " + point.reference_period + "<br>"
+        : "") +
+      "Latitud: " + point.latitude + "<br>" +
+      "Longitud: " + point.longitude
+    );
+
+    rectangle.on("click", function (event) {
+
+      selectMapCoordinates(
+        event.latlng.lat,
+        event.latlng.lng,
+        "Celda climática",
+        point
+      );
+
+    });
+
+    rectangle.addTo(climateGridLayer);
+
+  });
+
+  updateClimateLegend(variable);
+}
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, function (character) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[character];
+    });
+  }
+
+  function updateSelectedMarker(latitude, longitude, title, description) {
+
+    if (selectedMarker) {
+      markersLayer.removeLayer(selectedMarker);
+    }
+
+    selectedMarker = L.circleMarker([latitude, longitude], {
+      radius: 10,
+      color: "#ffca75",
+      fillColor: "#ffca75",
+      fillOpacity: 1,
+      weight: 3,
+      bubblingMouseEvents: false
+    }).addTo(markersLayer);
+
+    selectedMarker.bindPopup(
+      "<strong>" + escapeHtml(title) + "</strong><br>" +
+      escapeHtml(description || "")
+    ).openPopup();
+  }
+
+  function addMarker(latitude, longitude, title, description, color) {
+
+    const marker = L.circleMarker([latitude, longitude], {
+      radius: 7,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.9,
+      weight: 2,
+      bubblingMouseEvents: false
+    }).addTo(markersLayer);
+
+    marker.bindPopup(
+      "<strong>" + escapeHtml(title) + "</strong><br>" +
+      escapeHtml(description)
+    );
+
+    // Al tocar una ciudad de referencia, también consulta su clima.
+    marker.on("click", function () {
+      selectMapCoordinates(latitude, longitude, title);
+    });
+
+    return marker;
+  }
+
+  referenceCities.forEach(function (city) {
+    addMarker(
+      city.lat,
+      city.lon,
+      city.name,
+      city.country,
+      "#91a8ff"
+    );
+  });
+
+  async function loadLocalCity() {
+    try {
+      const response = await fetch("/api/locations/3865424/weather");
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No se pudo cargar Arroyito.");
+      }
+
+      const location = data.location;
+
+      addMarker(
+        location.latitude,
+        location.longitude,
+        location.name,
+        "Córdoba, Argentina",
+        "#65d5a6"
+      );
+
+    } catch (error) {
+      console.error("No se pudo cargar el marcador local:", error);
+    }
+  }
+
+  function showWeatherLoading(location) {
+    selectedName.textContent = location.name;
+
+    selectedCountry.textContent = [
+      location.admin_region,
+      location.country_name || location.country
+    ].filter(Boolean).join(", ");
+
+    weatherInformation.innerHTML = `
+      <div class="map-empty-state">
+        <span>◷</span>
+        <p>Consultando condiciones meteorológicas...</p>
+      </div>
+    `;
+  }
+
+  function showWeatherData(current) {
+
+    weatherInformation.innerHTML = `
+      <div class="map-weather-grid">
+
+        <div class="map-weather-item">
+          <span>Temperatura</span>
+          <strong>${escapeHtml(current.temperature)} °C</strong>
+        </div>
+
+        <div class="map-weather-item">
+          <span>Sensación térmica</span>
+          <strong>${escapeHtml(current.feels_like)} °C</strong>
+        </div>
+
+        <div class="map-weather-item">
+          <span>Humedad</span>
+          <strong>${escapeHtml(current.humidity)}%</strong>
+        </div>
+
+        <div class="map-weather-item">
+          <span>Precipitación última hora</span>
+          <strong>${escapeHtml(current.precipitation)} mm</strong>
+        </div>
+
+        <div class="map-weather-item">
+          <span>Acumulado de hoy</span>
+          <strong>${
+            current.precipitation_today === null
+            || current.precipitation_today === undefined
+              ? "No disponible"
+              : `${escapeHtml(current.precipitation_today)} mm`
+          }</strong>
+        </div>
+
+        <div class="map-weather-item">
+          <span>Viento</span>
+          <strong>${escapeHtml(current.wind_speed)} km/h</strong>
+        </div>
+
+      </div>
+
+      <p class="map-weather-time">
+        Actualización consultada: ${escapeHtml(current.time || "No disponible")}
+      </p>
+    `;
+  }
+
+  function addHistoryStat(label, value) {
+    const card = document.createElement("div");
+    card.className = "map-history-stat";
+
+    const title = document.createElement("span");
+    title.textContent = label;
+
+    const result = document.createElement("strong");
+    result.textContent = value;
+
+    card.append(title, result);
+    historySummary.appendChild(card);
+  }
+
+  function formatSigned(value, unit, decimals = 1) {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+      return "Sin datos";
+    }
+
+    const number = Number(value);
+    return `${number > 0 ? "+" : ""}${number.toFixed(decimals)} ${unit}`;
+  }
+
+  function clearHistory(message) {
+    historySummary.replaceChildren();
+    temperatureHistoryChart.replaceChildren();
+    precipitationHistoryChart.replaceChildren();
+    historyCharts.hidden = true;
+    historyStatus.textContent = message;
+    historySource.textContent =
+      "Los valores históricos se consultan al analizar la zona seleccionada.";
+  }
+
+  function showGridAnomaly(point) {
+    if (!point || point.temperature_anomaly === undefined) {
+      return;
+    }
+
+    historySummary.replaceChildren();
+    addHistoryStat(
+      `Anomalía térmica · ${point.year}`,
+      formatSigned(point.temperature_anomaly, "°C", 2)
+    );
+    addHistoryStat(
+      `Temperatura media · ${point.year}`,
+      formatSigned(point.temperature_mean, "°C", 1)
+    );
+    addHistoryStat(
+      "Normal térmica · 1991-2020",
+      point.reference_temperature_mean !== null
+      && point.reference_temperature_mean !== undefined
+      && Number.isFinite(Number(point.reference_temperature_mean))
+        ? `${Number(point.reference_temperature_mean).toFixed(1)} °C`
+        : "Sin datos"
+    );
+    addHistoryStat(
+      `Anomalía de lluvia · ${point.year}`,
+      formatSigned(point.precipitation_anomaly_pct, "%")
+    );
+    addHistoryStat(
+      `Lluvia acumulada · ${point.year}`,
+      point.precipitation_total !== null
+      && point.precipitation_total !== undefined
+      && Number.isFinite(Number(point.precipitation_total))
+        ? `${Number(point.precipitation_total).toFixed(0)} mm`
+        : "Sin datos"
+    );
+    addHistoryStat(
+      "Normal de lluvia · 1991-2020",
+      point.reference_precipitation_total !== null
+      && point.reference_precipitation_total !== undefined
+      && Number.isFinite(Number(point.reference_precipitation_total))
+        ? `${Number(point.reference_precipitation_total).toFixed(0)} mm/año`
+        : "Sin datos"
+    );
+    historyCharts.hidden = true;
+    historyStatus.textContent =
+      `Celda seleccionada · referencia ${point.reference_period || "1991-2020"}.`;
+    historySource.textContent =
+      "Fuente: archivo histórico Open-Meteo (reanálisis). El color representa " +
+      "anomalía respecto de 1991-2020, no temperatura absoluta.";
+  }
+
+  function drawAnnualChart(container, annual, valueKey, unit, label) {
+    container.replaceChildren();
+    const series = annual.filter(
+      (record) => record[valueKey] !== null
+        && record[valueKey] !== undefined
+        && Number.isFinite(Number(record[valueKey]))
+    );
+    if (!series.length) return;
+
+    const namespace = "http://www.w3.org/2000/svg";
+    const width = 480;
+    const height = 100;
+    const padding = 10;
+    const middle = height / 2;
+    const amplitude = height / 2 - padding;
+    const maxMagnitude = Math.max(
+      0.1,
+      ...series.map((record) => Math.abs(Number(record[valueKey])))
+    );
+    const svg = document.createElementNS(namespace, "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", label);
+
+    const baseline = document.createElementNS(namespace, "line");
+    baseline.setAttribute("x1", "0");
+    baseline.setAttribute("x2", String(width));
+    baseline.setAttribute("y1", String(middle));
+    baseline.setAttribute("y2", String(middle));
+    baseline.setAttribute("stroke", "#71849d");
+    baseline.setAttribute("stroke-dasharray", "3 4");
+    svg.appendChild(baseline);
+
+    const coordinates = series.map((record, index) => {
+      const x = series.length === 1
+        ? width / 2
+        : padding + index * (width - padding * 2) / (series.length - 1);
+      const value = Number(record[valueKey]);
+      const y = middle - value / maxMagnitude * amplitude;
+      return {x, y, value, year: record.year};
+    });
+
+    const line = document.createElementNS(namespace, "polyline");
+    line.setAttribute(
+      "points",
+      coordinates.map((point) => `${point.x},${point.y}`).join(" ")
+    );
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", "#65d5f5");
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke-linejoin", "round");
+    line.setAttribute("stroke-linecap", "round");
+    svg.appendChild(line);
+
+    for (const point of coordinates) {
+      const circle = document.createElementNS(namespace, "circle");
+      circle.setAttribute("cx", String(point.x));
+      circle.setAttribute("cy", String(point.y));
+      circle.setAttribute("r", "2.5");
+      circle.setAttribute(
+        "fill",
+        valueKey === "precipitation_anomaly_pct"
+          ? point.value < 0 ? "#df9a55" : "#65b8e8"
+          : point.value < 0 ? "#6fa9ed" : "#ed776d"
+      );
+      const title = document.createElementNS(namespace, "title");
+      title.textContent =
+        `${point.year}: ${formatSigned(point.value, unit, 1)}`;
+      circle.appendChild(title);
+      svg.appendChild(circle);
+    }
+
+    const firstYear = document.createElementNS(namespace, "text");
+    firstYear.setAttribute("x", "0");
+    firstYear.setAttribute("y", String(height - 1));
+    firstYear.setAttribute("fill", "#91a5c1");
+    firstYear.setAttribute("font-size", "9");
+    firstYear.textContent = String(series[0].year);
+    svg.appendChild(firstYear);
+
+    const lastYear = document.createElementNS(namespace, "text");
+    lastYear.setAttribute("x", String(width));
+    lastYear.setAttribute("y", String(height - 1));
+    lastYear.setAttribute("fill", "#91a5c1");
+    lastYear.setAttribute("font-size", "9");
+    lastYear.setAttribute("text-anchor", "end");
+    lastYear.textContent = String(series[series.length - 1].year);
+    svg.appendChild(lastYear);
+
+    container.appendChild(svg);
+  }
+
+  function renderRegionalProfile(profile) {
+    historySummary.replaceChildren();
+    const reference = profile.reference;
+    addHistoryStat(
+      "Normal térmica · 1991-2020",
+      `${reference.temperature_mean.toFixed(1)} °C`
+    );
+    addHistoryStat(
+      "Normal de lluvia · 1991-2020",
+      `${reference.precipitation_mean.toFixed(0)} mm/año`
+    );
+    addHistoryStat(
+      "Tendencia térmica",
+      formatSigned(profile.trends.temperature_per_decade, "°C/década", 2)
+    );
+    addHistoryStat(
+      "Tendencia de lluvia",
+      formatSigned(profile.trends.precipitation_pct_per_decade, "%/década")
+    );
+
+    if (profile.extremes.warmest) {
+      addHistoryStat(
+        "Año más cálido",
+        `${profile.extremes.warmest.year} · ${
+          formatSigned(
+            profile.extremes.warmest.temperature_anomaly,
+            "°C",
+            2
+          )
+        }`
+      );
+    }
+    if (profile.extremes.coolest) {
+      addHistoryStat(
+        "Año más frío",
+        `${profile.extremes.coolest.year} · ${
+          formatSigned(
+            profile.extremes.coolest.temperature_anomaly,
+            "°C",
+            2
+          )
+        }`
+      );
+    }
+
+    for (const decade of profile.decades) {
+      addHistoryStat(
+        `${decade.decade}s · anomalía térmica media`,
+        formatSigned(decade.temperature_anomaly, "°C", 2)
+      );
+    }
+
+    drawAnnualChart(
+      temperatureHistoryChart,
+      profile.annual,
+      "temperature_anomaly",
+      "°C",
+      "Anomalía anual de temperatura respecto de 1991-2020"
+    );
+    drawAnnualChart(
+      precipitationHistoryChart,
+      profile.annual,
+      "precipitation_anomaly_pct",
+      "%",
+      "Anomalía anual de precipitación porcentual respecto de 1991-2020"
+    );
+    historyCharts.hidden = false;
+    historyStatus.textContent =
+      `${profile.period.start_year}-${profile.period.end_year} · ` +
+      "anomalías calculadas contra la referencia climática 1991-2020.";
+    historySource.textContent =
+      `${profile.source} · consultado ${
+        new Date(profile.dataset_updated_at).toLocaleString()
+      }.`;
+  }
+
+  async function fetchRegionalProfile(location, startYear, endYear) {
+    const cacheKey = [
+      location.latitude.toFixed(4),
+      location.longitude.toFixed(4),
+      startYear,
+      endYear
+    ].join(":");
+    let profile = regionalProfileCache.get(cacheKey);
+    if (profile) return profile;
+
+    const query = new URLSearchParams({
+      latitude: String(location.latitude),
+      longitude: String(location.longitude),
+      start_year: String(startYear),
+      end_year: String(endYear)
+    });
+    const response = await fetch(
+      `/api/atlas/region-profile?${query.toString()}`
+    );
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      registerArchiveRateLimit(response, data);
+      throw new Error(
+        data.error || "No se pudo cargar el análisis histórico."
+      );
+    }
+
+    archiveRetryUntil = 0;
+    profile = {
+      ...data.profile,
+      dataset_updated_at: data.dataset_updated_at
+    };
+    if (regionalProfileCache.size >= 24) {
+      regionalProfileCache.delete(regionalProfileCache.keys().next().value);
+    }
+    regionalProfileCache.set(cacheKey, profile);
+    return profile;
+  }
+
+  async function loadRegionalHistory() {
+    if (!selectedClimateLocation) return;
+
+    const startYear = Number(historyStartYear.value);
+    const endYear = Number(historyEndYear.value);
+    if (!Number.isInteger(startYear) || startYear > endYear) {
+      historyStatus.textContent =
+        "El año inicial debe ser menor o igual al año final.";
+      return;
+    }
+
+    const location = selectedClimateLocation;
+    historyLoadButton.disabled = true;
+    historyStatus.textContent =
+      "Consultando el archivo histórico y calculando las anomalías...";
+
+    try {
+      const profile = await fetchRegionalProfile(
+        location,
+        startYear,
+        endYear
+      );
+      if (selectedClimateLocation === location) {
+        renderRegionalProfile(profile);
+      }
+    } catch (error) {
+      if (selectedClimateLocation === location) {
+        historyStatus.textContent =
+          archiveRetryMessage() || error.message;
+        historySource.textContent =
+          "No se recibieron datos históricos del proveedor; no se muestran valores estimados.";
+      }
+    } finally {
+      historyLoadButton.disabled = !selectedClimateLocation;
+    }
+  }
+
+  function averageProfileValue(records, field) {
+    const values = records
+      .map((record) => record[field])
+      .filter(
+        (value) => value !== null
+          && value !== undefined
+          && Number.isFinite(Number(value))
+      );
+    return values.length
+      ? values.reduce((total, value) => total + Number(value), 0)
+        / values.length
+      : null;
+  }
+
+  function renderRegionalComparison(
+    firstLocation,
+    secondLocation,
+    firstProfile,
+    secondProfile
+  ) {
+    historyComparison.replaceChildren();
+
+    const firstTemperatureAnomaly = averageProfileValue(
+      firstProfile.annual,
+      "temperature_anomaly"
+    );
+    const secondTemperatureAnomaly = averageProfileValue(
+      secondProfile.annual,
+      "temperature_anomaly"
+    );
+    const firstPrecipitationAnomaly = averageProfileValue(
+      firstProfile.annual,
+      "precipitation_anomaly_pct"
+    );
+    const secondPrecipitationAnomaly = averageProfileValue(
+      secondProfile.annual,
+      "precipitation_anomaly_pct"
+    );
+
+    const difference = document.createElement("p");
+    difference.className = "map-history-comparison-delta";
+    difference.textContent =
+      "Diferencia (primera localidad menos segunda): normal térmica " +
+      `${formatSigned(
+        firstProfile.reference.temperature_mean
+          - secondProfile.reference.temperature_mean,
+        "°C",
+        2
+      )}; normal de lluvia ${formatSigned(
+        firstProfile.reference.precipitation_mean
+          - secondProfile.reference.precipitation_mean,
+        "mm/año",
+        0
+      )}; anomalía térmica media del período ${formatSigned(
+        firstTemperatureAnomaly === null || secondTemperatureAnomaly === null
+          ? null
+          : firstTemperatureAnomaly - secondTemperatureAnomaly,
+        "°C",
+        2
+      )}; anomalía de lluvia media ${formatSigned(
+        firstPrecipitationAnomaly === null
+          || secondPrecipitationAnomaly === null
+          ? null
+          : firstPrecipitationAnomaly - secondPrecipitationAnomaly,
+        "%",
+        1
+      )}.`;
+    historyComparison.appendChild(difference);
+
+    [
+      [firstLocation, firstProfile],
+      [secondLocation, secondProfile]
+    ].forEach(([location, profile]) => {
+      const card = document.createElement("div");
+      card.className = "map-history-comparison-location";
+      const title = document.createElement("h5");
+      title.textContent = [location.name, location.country]
+        .filter(Boolean)
+        .join(" · ");
+      card.appendChild(title);
+
+      const metrics = [
+        [
+          "Normal térmica · 1991-2020",
+          `${profile.reference.temperature_mean.toFixed(1)} °C`
+        ],
+        [
+          "Normal de lluvia · 1991-2020",
+          `${profile.reference.precipitation_mean.toFixed(0)} mm/año`
+        ],
+        [
+          "Anomalía térmica media del período",
+          formatSigned(
+            averageProfileValue(profile.annual, "temperature_anomaly"),
+            "°C",
+            2
+          )
+        ],
+        [
+          "Anomalía de lluvia media del período",
+          formatSigned(
+            averageProfileValue(
+              profile.annual,
+              "precipitation_anomaly_pct"
+            ),
+            "%",
+            1
+          )
+        ],
+        [
+          "Tendencia térmica",
+          formatSigned(
+            profile.trends.temperature_per_decade,
+            "°C/década",
+            2
+          )
+        ],
+        [
+          "Tendencia de lluvia",
+          formatSigned(
+            profile.trends.precipitation_pct_per_decade,
+            "%/década"
+          )
+        ]
+      ];
+
+      metrics.forEach(([label, value]) => {
+        const metric = document.createElement("p");
+        metric.textContent = `${label}: ${value}`;
+        card.appendChild(metric);
+      });
+      historyComparison.appendChild(card);
+    });
+  }
+
+  async function searchComparisonLocations() {
+    const query = historyCompareInput.value.trim();
+    historyCompareResults.replaceChildren();
+    if (query.length < 2) {
+      historyStatus.textContent = "Ingresá al menos dos caracteres.";
+      return;
+    }
+
+    historyStatus.textContent = "Buscando localidad de comparación...";
+    try {
+      const response = await fetch(
+        "/api/locations/search?q=" + encodeURIComponent(query)
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No se pudo realizar la búsqueda.");
+      }
+      if (!data.locations || data.locations.length === 0) {
+        historyStatus.textContent = "No se encontraron localidades.";
+        return;
+      }
+
+      data.locations.forEach((location) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "map-history-compare-result";
+        const name = document.createElement("strong");
+        name.textContent = location.name;
+        const details = document.createElement("span");
+        details.textContent = [
+          location.admin_region,
+          location.country_name || location.country
+        ].filter(Boolean).join(", ");
+        button.append(name, details);
+        button.addEventListener("click", () => {
+          comparisonClimateLocation = {
+            latitude: Number(location.latitude),
+            longitude: Number(location.longitude),
+            name: location.name,
+            country: location.country_name || location.country || ""
+          };
+          historyCompareInput.value = [
+            location.name,
+            location.country_name || location.country
+          ].filter(Boolean).join(", ");
+          historyCompareResults.replaceChildren();
+          historyComparison.replaceChildren();
+          historyCompareLoad.disabled = !selectedClimateLocation;
+          historyStatus.textContent =
+            `Localidad de comparación: ${historyCompareInput.value}.`;
+        });
+        historyCompareResults.appendChild(button);
+      });
+      historyStatus.textContent =
+        `Elegí una de las ${data.locations.length} localidades encontradas.`;
+    } catch (error) {
+      historyStatus.textContent = error.message;
+    }
+  }
+
+  async function loadRegionalComparison() {
+    if (!selectedClimateLocation || !comparisonClimateLocation) return;
+
+    const startYear = Number(historyStartYear.value);
+    const endYear = Number(historyEndYear.value);
+    if (!Number.isInteger(startYear) || startYear > endYear) {
+      historyStatus.textContent =
+        "El año inicial debe ser menor o igual al año final.";
+      return;
+    }
+
+    const firstLocation = selectedClimateLocation;
+    const secondLocation = comparisonClimateLocation;
+    historyCompareLoad.disabled = true;
+    historyStatus.textContent =
+      "Calculando perfiles comparables para ambas localidades...";
+    try {
+      const [firstProfile, secondProfile] = await Promise.all([
+        fetchRegionalProfile(firstLocation, startYear, endYear),
+        fetchRegionalProfile(secondLocation, startYear, endYear)
+      ]);
+      if (
+        selectedClimateLocation === firstLocation
+        && comparisonClimateLocation === secondLocation
+      ) {
+        renderRegionalComparison(
+          firstLocation,
+          secondLocation,
+          firstProfile,
+          secondProfile
+        );
+        historyStatus.textContent =
+          `Comparación ${startYear}-${endYear} · ambas localidades usan ` +
+          "la referencia 1991-2020.";
+      }
+    } catch (error) {
+      historyStatus.textContent =
+        archiveRetryMessage() || error.message;
+      historySource.textContent =
+        "No se recibieron todos los datos históricos necesarios para comparar.";
+    } finally {
+      historyCompareLoad.disabled =
+        !selectedClimateLocation || !comparisonClimateLocation;
+    }
+  }
+
+  function selectClimateLocation(location, atlasPoint = null) {
+    selectedClimateLocation = {
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+      name: location.name || "Celda climática",
+      country: location.country_name || location.country || ""
+    };
+    historyLoadButton.disabled = false;
+    historyCompareLoad.disabled = !comparisonClimateLocation;
+    historyComparison.replaceChildren();
+    clearHistory(
+      `Zona seleccionada: ${selectedClimateLocation.name}. ` +
+      "Analizá el período para ver anomalías y tendencias."
+    );
+    if (atlasPoint) {
+      showGridAnomaly(atlasPoint);
+    }
+  }
+
+  // Selección de localidades encontradas mediante el buscador.
+  async function selectLocation(location) {
+
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      searchMessage.textContent = "La localidad no tiene coordenadas válidas.";
+      return;
+    }
+
+    searchMessage.textContent = "";
+    searchResults.innerHTML = "";
+
+    selectClimateLocation(location);
+    showWeatherLoading(location);
+
+    map.setView([latitude, longitude], 7);
+
+    updateSelectedMarker(
+      latitude,
+      longitude,
+      location.name,
+      location.country_name || location.country || ""
+    );
+
+    try {
+      const response = await fetch(
+        "/api/locations/" + encodeURIComponent(location.geoname_id) + "/weather"
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No se pudo consultar el clima.");
+      }
+
+      selectedName.textContent = data.location.name;
+
+      selectedCountry.textContent = [
+        data.location.admin_region,
+        data.location.country_name || data.location.country
+      ].filter(Boolean).join(", ");
+
+      showWeatherData(data.weather.current);
+
+    } catch (error) {
+      weatherInformation.innerHTML = `
+        <div class="map-empty-state">
+          <span>!</span>
+          <p>${escapeHtml(error.message)}</p>
+        </div>
+      `;
+    }
+  }
+
+  // Consulta meteorológica para cualquier punto del mapa.
+  async function selectMapCoordinates(
+    latitude,
+    longitude,
+    pointName,
+    atlasPoint = null
+  ) {
+
+    searchMessage.textContent = "";
+    searchResults.innerHTML = "";
+
+    selectClimateLocation({
+      latitude,
+      longitude,
+      name: pointName || "Punto del mapa"
+    }, atlasPoint);
+    selectedName.textContent = "Identificando ubicación...";
+
+    selectedCountry.textContent =
+      "Latitud: " + latitude.toFixed(4) +
+      " · Longitud: " + longitude.toFixed(4);
+    searchMessage.textContent =
+      "Identificando localidad, provincia y país...";
+
+    weatherInformation.innerHTML = `
+      <div class="map-empty-state">
+        <span>◷</span>
+        <p>Consultando la ubicación y las condiciones meteorológicas...</p>
+      </div>
+    `;
+
+    updateSelectedMarker(
+      latitude,
+      longitude,
+      "Punto seleccionado",
+      "Coordenadas: " + latitude.toFixed(4) + ", " + longitude.toFixed(4)
+    );
+
+    const reverseGeocodeRequest = fetch(
+      "/api/geocoding/reverse?latitude=" +
+      encodeURIComponent(latitude) +
+      "&longitude=" +
+      encodeURIComponent(longitude)
+    ).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "No se pudo identificar la ubicación."
+        );
+      }
+      return data.location;
+    });
+
+    const weatherRequest = fetch(
+        "/api/weather/coordinates?latitude=" +
+        encodeURIComponent(latitude) +
+        "&longitude=" +
+        encodeURIComponent(longitude)
+      ).then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || "No se pudo consultar el clima."
+          );
+        }
+        return data.weather.current;
+      });
+
+    const [locationResult, weatherResult] = await Promise.allSettled([
+      reverseGeocodeRequest,
+      weatherRequest
+    ]);
+
+    if (locationResult.status === "fulfilled") {
+      const location = locationResult.value;
+      const displayName = location.is_ocean
+        ? "Mar u océano"
+        : location.locality || location.display_name;
+      selectedName.textContent = displayName;
+      selectedCountry.textContent = [
+        location.province,
+        location.country,
+        `Latitud: ${latitude.toFixed(4)}`,
+        `Longitud: ${longitude.toFixed(4)}`
+      ].filter(Boolean).join(" · ");
+      selectedClimateLocation = {
+        latitude,
+        longitude,
+        name: displayName,
+        country: location.country,
+        admin_region: location.province,
+        is_ocean: location.is_ocean
+      };
+      updateSelectedMarker(
+        latitude,
+        longitude,
+        location.display_name || displayName,
+        selectedCountry.textContent
+      );
+      searchMessage.textContent = location.is_ocean
+        ? "El punto seleccionado está en mar u océano."
+        : `Ubicación identificada: ${location.display_name}.`;
+    } else {
+      selectedName.textContent = pointName || "Punto del mapa";
+      searchMessage.textContent =
+        `No se pudo identificar el lugar: ${locationResult.reason.message}`;
+    }
+
+    if (weatherResult.status === "fulfilled") {
+      showWeatherData(weatherResult.value);
+    } else {
+      weatherInformation.innerHTML = `
+        <div class="map-empty-state">
+          <span>!</span>
+          <p>${escapeHtml(weatherResult.reason.message)}</p>
+        </div>
+      `;
+    }
+  }
+
+  // Buscador de localidades.
+  async function searchLocations() {
+
+    const query = searchInput.value.trim();
+
+    searchResults.innerHTML = "";
+
+    if (query.length < 2) {
+      searchMessage.textContent = "Ingresá al menos dos caracteres.";
+      return;
+    }
+
+    searchMessage.textContent = "Buscando localidades...";
+
+    try {
+
+      const response = await fetch(
+        "/api/locations/search?q=" + encodeURIComponent(query)
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No se pudo realizar la búsqueda.");
+      }
+
+      if (!data.locations || data.locations.length === 0) {
+        searchMessage.textContent = "No se encontraron localidades.";
+        return;
+      }
+
+      searchMessage.textContent =
+        "Se encontraron " + data.locations.length + " resultados.";
+
+      data.locations.forEach(function (location) {
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "map-result-item";
+
+        const name = document.createElement("strong");
+        name.textContent = location.name;
+
+        const details = document.createElement("span");
+        details.textContent = [
+          location.admin_region,
+          location.country_name || location.country
+        ].filter(Boolean).join(", ");
+
+        button.appendChild(name);
+        button.appendChild(details);
+
+        button.addEventListener("click", function () {
+          selectLocation(location);
+        });
+
+        searchResults.appendChild(button);
+      });
+
+    } catch (error) {
+      searchMessage.textContent = error.message;
+    }
+  }
+
+  searchButton.addEventListener("click", searchLocations);
+
+// Cambiar la variable climática.
+climateLayerSelect.addEventListener("change", function () {
+  const variable = climateLayerSelect.value;
+  const usesHistory = isHistoricalLayer(variable);
+  climatePeriodControl.hidden = !usesHistory;
+  updateClimateLegend(variable);
+
+  if (usesHistory) {
+    loadClimateAnomalies(Number(climatePeriodYear.value));
+  } else if (currentClimateGridData) {
+    climateGridData = currentClimateGridData;
+    drawClimateLayer(variable);
+  } else {
+    loadClimateGrid();
+  }
+});
+
+climatePeriodYear.addEventListener("change", function () {
+  if (isHistoricalLayer(climateLayerSelect.value)) {
+    loadClimateAnomalies(Number(climatePeriodYear.value));
+  }
+});
+
+historyStartYear.addEventListener("change", function () {
+  if (Number(historyStartYear.value) > Number(historyEndYear.value)) {
+    historyEndYear.value = historyStartYear.value;
+  }
+});
+
+historyEndYear.addEventListener("change", function () {
+  if (Number(historyEndYear.value) < Number(historyStartYear.value)) {
+    historyStartYear.value = historyEndYear.value;
+  }
+});
+
+historyLoadButton.addEventListener("click", loadRegionalHistory);
+historyCompareSearch.addEventListener("click", searchComparisonLocations);
+historyCompareLoad.addEventListener("click", loadRegionalComparison);
+
+historyCompareInput.addEventListener("keydown", function (event) {
+  if (event.key === "Enter") {
+    searchComparisonLocations();
+  }
+});
+
+// Actualizar los datos meteorológicos.
+climateLayerRefresh.addEventListener("click", function () {
+  if (isHistoricalLayer(climateLayerSelect.value)) {
+    loadClimateAnomalies(
+      Number(climatePeriodYear.value),
+      true
+    );
+  } else {
+    loadClimateGrid(true);
+  }
+});
+
+  searchInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      searchLocations();
+    }
+  });
+
+  // Clic en cualquier lugar libre del mapa.
+  map.on("click", function (event) {
+    selectMapCoordinates(
+      event.latlng.lat,
+      event.latlng.lng,
+      "Punto del mapa"
+    );
+  });
+
+
+loadLocalCity();
+
+// Cargar la primera capa del atlas.
+loadClimateGrid();
+
+setTimeout(function () {
+  map.invalidateSize();
+}, 300);
+
+
+});
+</script>
+
+{% endblock %}
+
+{% block scripts %}
+<script
+  src="{{ url_for('static', filename='js/climate_observatory.js') }}"
+  defer
+></script>
+<script
+  src="{{ url_for('static', filename='js/climate_connections.js') }}"
+  defer
+></script>
+{% endblock %}

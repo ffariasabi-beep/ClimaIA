@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Centro de investigaciones | Memoria climática{% endblock %}
+
+{% block head %}
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/research_center.css') }}"
+  >
+{% endblock %}
+
+{% block content %}
+<main
+  class="research-center"
+  id="research-center"
+  data-message-url="{{ url_for('research_center.submit_message') }}"
+  data-job-url-template="{{ url_for('research_center.get_job', report_id=0) }}"
+  data-session-url-template="{{ url_for('research_center.get_investigation', investigation_id=0) }}"
+  data-history-url="{{ url_for('research_center.get_history') }}"
+  data-save-url-template="{{ url_for('research_center.save_investigation', investigation_id=0) }}"
+>
+  <header class="research-hero">
+    <a
+      class="research-back-link"
+      href="{{ url_for('main.dashboard') }}#investigations"
+    >
+      ← Volver a Memoria climática
+    </a>
+    <span class="research-eyebrow">MÓDULO 01 · MEMORIA CLIMÁTICA</span>
+    <h1>Centro de <span>investigaciones</span></h1>
+    <p>
+      Investigá la evolución del clima, compará regiones y descubrí patrones
+      a partir de registros históricos reales de ClimaIA.
+    </p>
+    <div class="research-hero-note">
+      <span>GROQ · HERRAMIENTAS DE CLIMAIA · DATOS VERIFICABLES</span>
+      <span>No se generan cifras si no hay registros suficientes.</span>
+    </div>
+  </header>
+
+  <section class="research-overview" aria-label="Resumen de investigaciones">
+    <article class="research-overview-card">
+      <span>INVESTIGACIONES GUARDADAS</span>
+      <strong id="research-saved-count">{{ investigation_count }}</strong>
+      <small>En tu cuenta</small>
+    </article>
+    <article class="research-overview-card">
+      <span>LOCALIDADES CONSULTADAS</span>
+      <strong id="research-locality-count">{{ locality_count }}</strong>
+      <small>En tus últimas investigaciones guardadas</small>
+    </article>
+    <article class="research-overview-card research-overview-highlight">
+      <span>DATOS Y CÁLCULOS</span>
+      <strong>ClimaIA</strong>
+      <small>Groq organiza; Python calcula con fuentes identificadas.</small>
+    </article>
+  </section>
+
+  <div class="research-layout">
+    <aside class="research-sidebar">
+      <section class="research-panel research-quick-panel">
+        <div class="research-panel-heading">
+          <span class="research-kicker">EMPEZAR</span>
+          <h2>Investigaciones rápidas</h2>
+        </div>
+        <div class="research-quick-list">
+          <button
+            type="button"
+            class="research-quick-button"
+            data-research-prompt="Compará la temperatura media y la precipitación acumulada de Córdoba, Buenos Aires y Rosario entre 1991 y 2020."
+          >
+            <span class="research-quick-icon">↔</span>
+            <span><strong>Comparar localidades</strong><small>Variables y períodos comunes</small></span>
+          </button>
+          <button
+            type="button"
+            class="research-quick-button"
+            data-research-prompt="Analizá la evolución histórica de la temperatura media y la precipitación de Córdoba durante los últimos 30 años. Mostrá tendencias descriptivas y limitaciones."
+          >
+            <span class="research-quick-icon">⌁</span>
+            <span><strong>Evolución histórica</strong><small>Series y tendencias descriptivas</small></span>
+          </button>
+          <button
+            type="button"
+            class="research-quick-button"
+            data-research-prompt="Buscá localidades con perfiles de temperatura y precipitación similares a Córdoba usando los datos y perfiles disponibles."
+          >
+            <span class="research-quick-icon">◎</span>
+            <span><strong>Climas similares</strong><small>Perfiles mensuales comparables</small></span>
+          </button>
+          <button
+            type="button"
+            class="research-quick-button"
+            data-research-prompt="Identificá años con temperaturas medias altas y precipitaciones bajas para Córdoba entre 1991 y 2020. Indicá si hay asociación estadística, sin inferir causalidad."
+          >
+            <span class="research-quick-icon">⌗</span>
+            <span><strong>Identificar patrones</strong><small>Extremos y asociaciones observadas</small></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="research-panel research-stats-panel">
+        <div class="research-panel-heading">
+          <span class="research-kicker">MÁS FRECUENTES · ÚLTIMAS GUARDADAS</span>
+          <h2>Localidades</h2>
+        </div>
+        {% if popular_locations %}
+          <ol class="research-popular-list">
+            {% for location in popular_locations %}
+              <li>
+                <span>{{ location.name }}</span>
+                <strong>{{ location.count }}</strong>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <p class="research-muted">
+            Guardá investigaciones para ver tus localidades más consultadas.
+          </p>
+        {% endif %}
+      </section>
+
+      <section class="research-panel research-history-panel">
+        <div class="research-panel-heading">
+          <span class="research-kicker">TU ACTIVIDAD</span>
+          <h2>Historial de investigaciones</h2>
+        </div>
+        <div id="research-history-list" class="research-history-list">
+          {% for investigation in investigations %}
+            <button
+              type="button"
+              class="research-history-item"
+              data-investigation-id="{{ investigation.id }}"
+            >
+              <strong>{{ investigation.title }}</strong>
+              <span class="research-history-meta">
+                <small>{{ investigation.updated_at.strftime("%d/%m/%Y") }}</small>
+                <small class="research-history-status {{ investigation.status }}">
+                  {{ "Guardada" if investigation.status == "saved" else "Borrador" }}
+                </small>
+              </span>
+            </button>
+          {% else %}
+            <p class="research-muted" id="research-history-empty">
+              Tus investigaciones guardadas van a aparecer acá.
+            </p>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+
+    <section class="research-workspace" aria-labelledby="research-assistant-title">
+      <div class="research-workspace-header">
+        <div>
+          <span class="research-kicker">AGENTE DE INVESTIGACIÓN CLIMÁTICA</span>
+          <h2 id="research-assistant-title">¿Qué querés investigar?</h2>
+          <p>
+            El agente busca localidades, consulta registros y perfiles, realiza
+            cálculos en el backend y presenta resultados con su fuente y período.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="research-button research-button-secondary"
+          id="research-new-button"
+        >
+          Nueva investigación
+        </button>
+      </div>
+
+      <div
+        id="research-messages"
+        class="research-messages"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
+        <div class="research-empty-state" id="research-empty-state">
+          <span class="research-empty-icon">⌁</span>
+          <h3>Investigá con evidencia</h3>
+          <p>
+            Preguntá por localidades, variables y períodos. Cada cifra y gráfico
+            se construye con resultados de herramientas de ClimaIA.
+          </p>
+        </div>
+      </div>
+
+      <p
+        class="research-status"
+        id="research-status"
+        aria-live="polite"
+      ></p>
+
+      <form id="research-chat-form" class="research-chat-form">
+        <input
+          id="research-csrf-token"
+          type="hidden"
+          value="{{ csrf_token() }}"
+        >
+        <label for="research-question">PREGUNTA DE INVESTIGACIÓN</label>
+        <textarea
+          id="research-question"
+          rows="3"
+          maxlength="1200"
+          placeholder="Ej.: ¿Cómo evolucionaron la temperatura media y las precipitaciones de Córdoba entre 1991 y 2020?"
+          required
+        ></textarea>
+        <div class="research-chat-footer">
+          <small>Hasta 1200 caracteres · Las consultas extensas se procesan en segundo plano.</small>
+          <button
+            type="submit"
+            class="research-button research-button-primary"
+            id="research-send-button"
+          >
+            Investigar
+          </button>
+        </div>
+      </form>
+
+      <form id="research-save-form" class="research-save-form" hidden>
+        <div class="research-save-heading">
+          <div>
+            <span class="research-kicker">CONSERVAR RESULTADOS</span>
+            <h3>Guardar investigación</h3>
+          </div>
+          <span id="research-save-status" aria-live="polite"></span>
+        </div>
+        <label for="research-save-title">TÍTULO</label>
+        <input
+          id="research-save-title"
+          type="text"
+          maxlength="180"
+          required
+        >
+        <label for="research-save-description">DESCRIPCIÓN (OPCIONAL)</label>
+        <textarea
+          id="research-save-description"
+          rows="2"
+          maxlength="2000"
+        ></textarea>
+        <button
+          type="submit"
+          class="research-button research-button-secondary"
+          id="research-save-button"
+        >
+          Guardar investigación
+        </button>
+      </form>
+    </section>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+  <script
+    src="{{ url_for('static', filename='js/research_center.js') }}"
+    defer
+  ></script>
+{% endblock %}

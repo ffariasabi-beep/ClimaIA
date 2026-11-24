@@ -1,0 +1,718 @@
+{% extends "base.html" %}
+
+{% block title %}Conexiones climáticas | ClimaIA{% endblock %}
+
+{% block head %}
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+>
+<style>
+  .connections-page {
+    --panel: #101c30;
+    --border: #263a57;
+    --text: #edf3ff;
+    --muted: #91a5c1;
+    --blue: #91a8ff;
+    --cyan: #65d5f5;
+    width: min(1160px, 91%);
+    margin: 0 auto;
+    padding: 48px 0 70px;
+    color: var(--text);
+  }
+
+  .connections-header {
+    padding: 38px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background:
+      radial-gradient(circle at 90% 15%, #263e72 0%, transparent 36%),
+      linear-gradient(120deg, #111e34, #0c1426);
+  }
+
+  .connections-label,
+  .match-label {
+    color: var(--cyan);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+
+  .connections-header h1 {
+    margin: 15px 0 10px;
+    font-size: clamp(30px, 5vw, 45px);
+    letter-spacing: -1.5px;
+  }
+
+  .connections-header p,
+  .panel-description,
+  .match-location p,
+  .empty-state,
+  .method-note {
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .connections-header p {
+    max-width: 700px;
+    font-size: 14px;
+  }
+
+  .connections-back {
+    display: inline-block;
+    margin-top: 20px;
+    color: #b8c8ff;
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .connections-panel,
+  .match-card,
+  .report-panel {
+    margin-top: 24px;
+    padding: 25px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(145deg, #111d32, #0d1729);
+  }
+
+  .connections-panel h2,
+  .results-heading h2 {
+    margin: 0 0 7px;
+    font-size: 20px;
+  }
+
+  .panel-description {
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+
+  .connection-search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .connection-search input {
+    flex: 1;
+    min-width: 230px;
+    padding: 14px 15px;
+    border: 1px solid #30436d;
+    border-radius: 10px;
+    outline: none;
+    background: #091328;
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  .connection-search input:focus {
+    border-color: var(--blue);
+  }
+
+  .connection-search button,
+  .location-button {
+    padding: 13px 20px;
+    border: 0;
+    border-radius: 10px;
+    background: #718aff;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .connection-search button:hover,
+  .location-button:hover {
+    background: #8ba0ff;
+  }
+
+  .error-message,
+  .ai-error {
+    margin-top: 17px;
+    padding: 13px 15px;
+    border: 1px solid rgba(220, 70, 90, .3);
+    border-radius: 10px;
+    background: rgba(220, 70, 90, .12);
+    color: #ffabb4;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .locations-list,
+  .matches-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+  }
+
+  .location-option {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 19px;
+    border: 1px solid rgba(143, 165, 255, .17);
+    border-radius: 13px;
+    background: #0c172b;
+  }
+
+  .location-option h3,
+  .match-location h3 {
+    margin: 0 0 7px;
+    font-size: 16px;
+  }
+
+  .location-option p,
+  .location-option small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .location-button {
+    width: 100%;
+  }
+
+  .results-section {
+    margin-top: 38px;
+  }
+
+  .connections-map-panel {
+    margin: 22px 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: #0c1729;
+  }
+
+  .connections-map-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 19px 21px;
+  }
+
+  .connections-map-heading h3 {
+    margin: 7px 0 5px;
+    font-size: 16px;
+  }
+
+  .connections-map-heading p,
+  .connections-map-count {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .connections-map-count {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border: 1px solid #2d4967;
+    border-radius: 99px;
+    background: #10233a;
+    color: #b7d5e9;
+  }
+
+  #climate-connections-map {
+    width: 100%;
+    height: min(52vh, 480px);
+    min-height: 330px;
+    background: #0b1528;
+  }
+
+  .connections-map-panel .leaflet-container {
+    background: #0b1528;
+    font: 12px Arial, sans-serif;
+  }
+
+  .connections-map-panel .leaflet-control-attribution {
+    background: rgb(5 15 26 / 83%);
+    color: #a7bfd2;
+  }
+
+  .connections-map-panel .leaflet-control-attribution a {
+    color: #8fd7ec;
+  }
+
+  .connections-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .connections-map-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .connections-map-legend i {
+    width: 10px;
+    height: 10px;
+    border: 2px solid #dff9ff;
+    border-radius: 50%;
+    background: #65d5f5;
+  }
+
+  .connections-map-legend .target-dot {
+    background: #ffaf70;
+  }
+
+  .results-heading {
+    margin-bottom: 17px;
+  }
+
+  .results-heading p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .match-card {
+    margin-top: 0;
+    padding: 20px;
+    transition: border-color .2s, transform .2s;
+  }
+
+  .match-card:hover {
+    transform: translateY(-2px);
+    border-color: #6685d1;
+  }
+
+  .match-location {
+    margin: 10px 0 17px;
+  }
+
+  .match-location p {
+    font-size: 12px;
+  }
+
+  .match-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .match-metric {
+    padding: 12px;
+    border-radius: 10px;
+    background: #0b1528;
+  }
+
+  .match-metric span {
+    display: block;
+    min-height: 27px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .match-metric strong {
+    display: block;
+    margin-top: 5px;
+    font-size: 16px;
+  }
+
+  .match-card details {
+    margin-top: 16px;
+    color: #cbd7f1;
+    font-size: 12px;
+  }
+
+  .match-card summary {
+    cursor: pointer;
+    color: #b8c8ff;
+  }
+
+  .monthly-table-wrapper {
+    margin-top: 12px;
+    overflow-x: auto;
+  }
+
+  .monthly-table {
+    width: 100%;
+    min-width: 510px;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .monthly-table th,
+  .monthly-table td {
+    padding: 9px;
+    border-bottom: 1px solid #263a57;
+    text-align: left;
+  }
+
+  .monthly-table th {
+    color: var(--cyan);
+    font-weight: 700;
+  }
+
+  .report-content {
+    display: grid;
+    gap: 14px;
+    padding: 0 20px 20px;
+    color: #d4def2;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .report-panel {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .report-header {
+    padding: 23px 25px;
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(circle at 90% 15%, #263e7244 0%, transparent 40%),
+      #111d32;
+  }
+
+  .report-header h2 {
+    margin: 8px 0 5px;
+    font-size: 19px;
+  }
+
+  .report-header p {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .report-content > p {
+    margin: 4px 5px;
+  }
+
+  .report-section-card {
+    padding: 18px;
+    border: 1px solid rgba(143, 165, 255, .16);
+    border-radius: 13px;
+    background: #0c172b;
+  }
+
+  .report-section-card h2,
+  .report-section-card h3 {
+    margin: 0 0 13px;
+    color: #e8efff;
+    font-size: 15px;
+  }
+
+  .report-section-card h2 {
+    padding-bottom: 10px;
+    border-bottom: 1px solid #263a57;
+  }
+
+  .report-content ul,
+  .report-content ol {
+    display: grid;
+    gap: 8px;
+    padding-left: 22px;
+  }
+
+  .report-content li::marker {
+    color: var(--cyan);
+  }
+
+  .report-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid #263a57;
+    border-radius: 10px;
+    background: #091426;
+  }
+
+  .report-table {
+    width: 100%;
+    min-width: 580px;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #263a57;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .report-table th {
+    background: #14243b;
+    color: var(--cyan);
+    font-weight: 700;
+  }
+
+  .report-table tbody tr:nth-child(even) {
+    background: #0e1b30;
+  }
+
+  .report-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .report-content strong {
+    color: #f0f4ff;
+  }
+
+  .report-source {
+    padding: 0 25px 20px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-line;
+  }
+
+  .empty-state {
+    margin-top: 20px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #0b1528;
+    font-size: 13px;
+  }
+
+  .method-note {
+    margin-top: 18px;
+    font-size: 11px;
+  }
+
+  @media (max-width: 700px) {
+    .connections-page {
+      padding-top: 25px;
+    }
+
+    .connections-header {
+      padding: 26px;
+    }
+
+    .locations-list,
+    .matches-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .match-metrics {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="connections-page">
+  <header class="connections-header">
+    <span class="connections-label">CLIMAIA / MÓDULO 03</span>
+    <h1>Conexiones climáticas</h1>
+    <p>
+      Elegí una localidad para encontrar otras con patrones mensuales
+      parecidos de temperatura y precipitación, usando perfiles históricos
+      del período 1991–2020.
+    </p>
+    <a class="connections-back" href="{{ url_for('main.dashboard') }}">
+      ← Volver al centro de investigación
+    </a>
+  </header>
+
+  <section class="connections-panel">
+    <h2>¿Qué localidad querés comparar?</h2>
+    <p class="panel-description">
+      Buscá en el catálogo de localidades y seleccioná una referencia.
+    </p>
+    <form class="connection-search" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="search">
+      <input
+        type="search"
+        name="city"
+        value="{{ searched_city }}"
+        placeholder="Ej.: Córdoba, Argentina"
+        aria-label="Nombre de la localidad"
+        minlength="2"
+        required
+      >
+      <button type="submit">Buscar localidad</button>
+    </form>
+
+    {% if error %}
+      <p class="error-message" role="alert">{{ error }}</p>
+    {% endif %}
+
+    {% if locations %}
+      <div class="locations-list">
+        {% for location in locations %}
+          <article class="location-option">
+            <div>
+              <h3>{{ location.name }}, {{ location.country_name }}</h3>
+              <p>
+                {% if location.admin_region %}{{ location.admin_region }} · {% endif %}
+                {{ "%.2f"|format(location.latitude) }}°,
+                {{ "%.2f"|format(location.longitude) }}°
+              </p>
+            </div>
+            <form method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="find_similar">
+              <input
+                type="hidden"
+                name="selected_geoname_id"
+                value="{{ location.geoname_id }}"
+              >
+              <button class="location-button" type="submit">
+                Buscar similitudes
+              </button>
+            </form>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  {% if similarity_result %}
+    <section class="results-section">
+      <div class="results-heading">
+        <span class="connections-label">RESULTADOS / {{ similarity_result.count }}</span>
+        <h2>
+          Localidades similares a
+          {{ similarity_result.target.name }},
+          {{ similarity_result.target.country }}
+        </h2>
+        <p>
+          Período {{ similarity_result.period.start }}–{{ similarity_result.period.end }}.
+          Cuanto menor es la distancia climática normalizada, mayor es la similitud.
+        </p>
+      </div>
+
+      <section class="connections-map-panel" aria-label="Mapa de conexiones climáticas">
+        <div class="connections-map-heading">
+          <div>
+            <span class="connections-label">DISTRIBUCIÓN GEOGRÁFICA</span>
+            <h3>Conexiones encontradas</h3>
+            <p>
+              Las líneas unen la localidad elegida con perfiles climáticos
+              comparables que ya están disponibles en ClimaIA.
+            </p>
+          </div>
+          <span class="connections-map-count">
+            {{ similarity_result.count }} perfiles
+          </span>
+        </div>
+        <div
+          id="climate-connections-map"
+          role="application"
+          aria-label="Mapa mundial de la localidad seleccionada y sus localidades con similitud climática"
+          data-target-lat="{{ similarity_result.target.latitude }}"
+          data-target-lon="{{ similarity_result.target.longitude }}"
+          data-target-name="{{ similarity_result.target.name }}"
+          data-target-country="{{ similarity_result.target.country }}"
+        ></div>
+        <div class="connections-map-legend" aria-label="Leyenda del mapa">
+          <span><i class="target-dot"></i> Localidad de referencia</span>
+          <span><i></i> Perfiles similares disponibles</span>
+          <span>La distancia climática ordena los resultados, no es un porcentaje.</span>
+        </div>
+      </section>
+
+      {% if similarity_result.results %}
+        <div class="matches-grid">
+          {% for match in similarity_result.results %}
+            <article
+              class="match-card"
+              data-lat="{{ match.location.latitude }}"
+              data-lon="{{ match.location.longitude }}"
+              data-name="{{ match.location.name }}"
+              data-country="{{ match.location.country }}"
+              data-distance="{{ match.distance_index }}"
+            >
+              <span class="match-label">COINCIDENCIA {{ "%02d"|format(loop.index) }}</span>
+              <div class="match-location">
+                <h3>{{ match.location.name }}, {{ match.location.country }}</h3>
+                <p>
+                  Distancia climática normalizada:
+                  <strong>{{ "%.4f"|format(match.distance_index) }}</strong>
+                </p>
+              </div>
+              <div class="match-metrics">
+                <div class="match-metric">
+                  <span>Error típico de temperatura</span>
+                  <strong>{{ "%.2f"|format(match.temperature_rmse) }} °C</strong>
+                </div>
+                <div class="match-metric">
+                  <span>Error típico de precipitación diaria</span>
+                  <strong>{{ "%.2f"|format(match.precipitation_rmse) }} mm</strong>
+                </div>
+                <div class="match-metric">
+                  <span>Meses comparados</span>
+                  <strong>12 meses</strong>
+                </div>
+              </div>
+
+              <details>
+                <summary>Ver comportamiento meteorológico mensual</summary>
+                <div class="monthly-table-wrapper">
+                  <table class="monthly-table">
+                    <thead>
+                      <tr>
+                        <th>Mes</th>
+                        <th>{{ similarity_result.target.name }} · °C</th>
+                        <th>{{ match.location.name }} · °C</th>
+                        <th>{{ similarity_result.target.name }} · mm/día</th>
+                        <th>{{ match.location.name }} · mm/día</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for month in match.comparison.monthly_comparison %}
+                        <tr>
+                          <td>{{ month.name or month.month }}</td>
+                          <td>{{ "%.1f"|format(month.first_temperature) }}</td>
+                          <td>{{ "%.1f"|format(month.second_temperature) }}</td>
+                          <td>{{ "%.2f"|format(month.first_precipitation_daily) }}</td>
+                          <td>{{ "%.2f"|format(month.second_precipitation_daily) }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </article>
+          {% endfor %}
+        </div>
+
+        {% if ai_report %}
+          <section class="report-panel">
+            <header class="report-header">
+              <span class="connections-label">ANÁLISIS ASISTIDO</span>
+              <h2>Interpretación de inteligencia artificial</h2>
+              <p>Resumen de similitudes, diferencias y límites de la comparación.</p>
+            </header>
+            <div id="ai-report-content" class="report-content"></div>
+            <div id="ai-report-source" class="report-source">{{ ai_report }}</div>
+          </section>
+        {% elif ai_error %}
+          <p class="ai-error" role="status">
+            Los resultados de similitud están disponibles. {{ ai_error }}
+          </p>
+        {% endif %}
+      {% elif similarity_result.message %}
+        <p class="empty-state">{{ similarity_result.message }}</p>
+      {% endif %}
+
+      <p class="method-note">
+        {{ similarity_result.method }}
+        Los perfiles se guardan y reutilizan en la base de datos de ClimaIA.
+      </p>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script
+  src="{{ url_for('static', filename='js/climate_connections.js') }}"
+  defer
+></script>
+{% endblock %}
